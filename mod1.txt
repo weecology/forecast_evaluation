@@ -1,0 +1,19 @@
+# model 1
+model {  
+   # priors on parameters
+   mu ~ dnorm(0, 0.01); 
+   tau.pro ~ dgamma(0.001,0.001); 
+   sd.q <- 1/sqrt(tau.pro);
+   phi ~ dnorm(0,1);
+   
+   X[1] <- mu;
+   predY[1] <- exp(X[1]);
+   Y[1] ~ dpois(exp(X[1]));
+
+   for(i in 2:N) {
+      predX[i] <- phi*X[i-1]; 
+      X[i] ~ dnorm(predX[i], tau.pro); # Process variation
+      predY[i] <- exp(X[i]);
+      Y[i] ~ dpois(exp(X[i])); # Observation variation
+   }
+}  
