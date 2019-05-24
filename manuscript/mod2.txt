@@ -1,8 +1,8 @@
-# model 1
+# model 2: AR(1)
 model {  
    # priors on parameters
-   mu ~ dnorm(0, 0.01); 
-   tau.pro ~ dgamma(0.001,0.001); 
+   mu ~ dnorm(log(meanY), 0.25); 
+   tau.pro ~ dgamma(0.1,0.1); 
    sd.q <- 1/sqrt(tau.pro);
    phi ~ dnorm(0,1);
    
@@ -12,7 +12,8 @@ model {
 
    for(i in 2:N) {
       predX[i] <- phi*X[i-1]; 
-      X[i] ~ dnorm(predX[i], tau.pro); # Process variation
+      checkX[i] ~ dnorm(predX[i], tau.pro); # Process variation
+      X[i] <- min(c(checkX[i], 18)); # Enforce ceiling to avoid overflow
       predY[i] <- exp(X[i]);
       Y[i] ~ dpois(exp(X[i])); # Observation variation
    }
