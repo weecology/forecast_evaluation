@@ -1,6 +1,33 @@
-#
-# ACTIVE DEVELOPMENT SPACE, NOT STABLE CODE
-#
+make_eval_tab <- function(mod1, mod2, mod3, mod4){
+  evalmat <- matrix(NA, nrow = 4 * length(mod1) * 12, ncol = 6)
+  spots <- 0
+
+  for(i in 1:length(mod1)){
+    for(j in 1:4){
+      obj <- eval(parse(text = paste0("mod", j)))
+      if (i <= length(obj)){
+        lead <- obj[[i]]$meta$lead_time
+        leads <- 1:lead
+        origin <- rep(max(obj[[i]]$meta$in_timeseries), lead)
+        mod <- rep(j, lead)
+        crps <- obj[[i]]$eval$crps
+        logs <- obj[[i]]$eval$logscore
+
+        spots <- max(spots) + 1:lead
+        evalmat[spots , 1] <- mod
+        evalmat[spots , 2] <- origin
+        evalmat[spots , 3] <- origin + leads
+        evalmat[spots , 4] <- leads
+        evalmat[spots , 5] <- crps
+        evalmat[spots , 6] <- logs
+      }
+    }
+  }
+
+  colnames(evalmat) <- c("model", "origin", "destin", "lead", "crps", "logs")
+  evalmat <- data.frame(evalmat)
+  evalmat
+}
 
 
 plot_sp_abunds <- function(plot = NULL, species = NULL){
@@ -13,7 +40,7 @@ plot_sp_abunds <- function(plot = NULL, species = NULL){
   for(i in 1:nrow(moons)){
     matchrow <- which(abunds_C$period == moons$period[i])
     if (length(matchrow) == 1){
-      abunds[i] <- abunds_C[matchrow, species]
+      abunds[i] <- as.numeric(abunds_C[matchrow, species])
     }
   }
   abunds
@@ -35,8 +62,8 @@ training_ts <- function(starts = 1, ends = 100){
 
 
 save_without_models <- function(modobj, file){
-  mods <- vector("list", length = length(in_ts))
-  for(i in 1:length(in_ts)){
+  mods <- vector("list", length = length(modobj))
+  for(i in 1:length(modobj)){
     mods[[i]] <- list(summary = modobj[[i]]$summary, data = modobj[[i]]$data,
                       meta = modobj[[i]]$meta, eval = modobj[[i]]$eval)
   }
@@ -98,7 +125,7 @@ inits_fun <- function(model){
                   .RNG.seed = sample(1:1e+06, 1),
                   mu = rnorm(1, 0, 1),
                   tau.pro = rgamma(1, shape = 0.1, rate = 0.1),
-                  phi = rnorm(1, 0, 0.5))
+                  phi = runif(1, -0.95, 0.95))
            }
   }
   if (model == 3){
@@ -107,7 +134,7 @@ inits_fun <- function(model){
                   .RNG.seed = sample(1:1e+06, 1),
                   mu = rnorm(1, 0, 1),
                   tau.pro = rgamma(1, shape = 0.1, rate = 0.1),
-                  phi = rnorm(1, 0, 0.5),
+                  phi = runif(1, -0.95, 0.95),
                   beta1 = rnorm(1, 0, 2),
                   beta2 = rnorm(1, 0, 2))
            }
@@ -118,8 +145,8 @@ inits_fun <- function(model){
                   .RNG.seed = sample(1:1e+06, 1),
                   mu = rnorm(1, 0, 1),
                   tau.pro = rgamma(1, shape = 0.1, rate = 0.1),
-                  phi = rnorm(1, 0, 0.5),
-                  theta = rnorm(1, 0, 0.25))
+                  phi = runif(1, -0.95, 0.95),
+                  theta = runif(1, -0.95, 0.95))
            }
   }
   out
@@ -191,16 +218,16 @@ data_fun <- function(model, abunds, in_timeseries, lead_time,
 
 name_fun <- function(model){
   if (model == 1){
-    out <- "mod1.txt"
+    out <- "model_scripts/mod1.txt"
   }
   if (model == 2){
-    out <- "mod2.txt"
+    out <- "model_scripts/mod2.txt"
   }
   if (model == 3){
-    out <- "mod3.txt"
+    out <- "model_scripts/mod3.txt"
   }
   if (model == 4){
-    out <- "mod4.txt"
+    out <- "model_scripts/mod4.txt"
   }
   out
 }

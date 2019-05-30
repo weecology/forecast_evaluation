@@ -1,19 +1,23 @@
-# model 2: AR(1)
+# model 4: ARMA(1,1)
 model {  
    # priors on parameters
    mu ~ dnorm(log(meanY), 0.25); 
-   tau.pro ~ dgamma(0.1,0.1); 
+   tau.pro ~ dgamma(1,0.1); 
    sd.q <- 1/sqrt(tau.pro);
-   phi ~ dnorm(0,1);
-   
+   phi ~ dnorm(0,1) T(-1, 1);
+   theta ~ dnorm(0,1) T(-1, 1);   
+
    X[1] <- mu;
+   predX[1] <- mu;
    predY[1] <- exp(X[1]);
    Y[1] ~ dpois(exp(X[1]));
+   err[1] <- Y[1] - predY[1];
 
    for(i in 2:N) {
-      predX[i] <- phi*X[i-1]; 
+      err[i] <- X[i-1] - predX[i-1];
+      predX[i] <- phi*X[i-1] + theta*err[i-1]; 
       checkX[i] ~ dnorm(predX[i], tau.pro); # Process variation
-      X[i] <- min(c(checkX[i], 18)); # Enforce ceiling to avoid overflow
+      X[i] <- min(c(checkX[i], 18)); # Enforce ceiling to avoid overflow 
       predY[i] <- exp(X[i]);
       Y[i] ~ dpois(exp(X[i])); # Observation variation
    }
