@@ -1,8 +1,3 @@
-
-blank <- function(...){
-  plot(1, 1, type = "n", xlab = "", ylab = "", xaxt = "n", yaxt = "n", ...)
-}
-
 rc <- rgb(0.8, 0.8, 0.8)
 
 tiff("fig1.tiff", width = 6.5, height = 3.5, units = "in", res = 200)

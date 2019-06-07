@@ -2,6 +2,7 @@ library(coda)
 library(runjags)
 library(portalr)
 library(scoringRules)
+library(e1071)
 source("functions.R")
 
 
@@ -18,7 +19,11 @@ moon_dates <- load_trapping_data(clean = FALSE)$newmoons_table$newmoondate
 
 ###
 # run this code to summarize the observations
-
+range(abunds, na.rm = TRUE)
+median(abunds, na.rm = TRUE)
+mean(abunds, na.rm = TRUE)
+var(abunds, na.rm = TRUE)
+skewness(abunds, na.rm = TRUE)
 
 #
 

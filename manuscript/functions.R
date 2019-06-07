@@ -1,5 +1,13 @@
+
+blank <- function(...){
+  plot(1, 1, type = "n", xlab = "", ylab = "", xaxt = "n", yaxt = "n", ...)
+}
+
+
+
 make_eval_tab <- function(mod1, mod2, mod3, mod4){
-  evalmat <- matrix(NA, nrow = 4 * length(mod1) * 12, ncol = 6)
+  npitc <- ncol(mod1[[1]]$eval$PIT)
+  evalmat <- matrix(NA, nrow = 4 * length(mod1) * 12, ncol = 6 + npitc)
   spots <- 0
 
   for(i in 1:length(mod1)){
@@ -12,19 +20,21 @@ make_eval_tab <- function(mod1, mod2, mod3, mod4){
         mod <- rep(j, lead)
         crps <- obj[[i]]$eval$crps
         logs <- obj[[i]]$eval$logscore
-
+        PIT <- obj[[i]]$eval$PIT
         spots <- max(spots) + 1:lead
-        evalmat[spots , 1] <- mod
-        evalmat[spots , 2] <- origin
-        evalmat[spots , 3] <- origin + leads
-        evalmat[spots , 4] <- leads
-        evalmat[spots , 5] <- crps
-        evalmat[spots , 6] <- logs
+        evalmat[spots, 1] <- mod
+        evalmat[spots, 2] <- origin
+        evalmat[spots, 3] <- origin + leads
+        evalmat[spots, 4] <- leads
+        evalmat[spots, 5] <- crps
+        evalmat[spots, 6] <- logs
+        evalmat[spots, 7:(6+npitc)] <- PIT
       }
     }
   }
 
-  colnames(evalmat) <- c("model", "origin", "destin", "lead", "crps", "logs")
+  colnames(evalmat) <- c("model", "origin", "destin", "lead", "crps", "logs",
+                         paste0("PITint", 1:npitc))
   evalmat <- data.frame(evalmat)
   evalmat
 }
