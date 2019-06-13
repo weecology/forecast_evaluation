@@ -1,3 +1,5 @@
+devtools::install_github("dapperstats/bbplot")
+library(bbplot)
 library(coda)
 library(runjags)
 library(portalr)

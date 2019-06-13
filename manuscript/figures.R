@@ -1,5 +1,7 @@
 rc <- rgb(0.8, 0.8, 0.8)
 
+# figure 1
+
 tiff("fig1.tiff", width = 6.5, height = 3.5, units = "in", res = 200)
 
 par(mar = c(2.5, 1.75, 0, 0.75), fig = c(0, 1, 0.01, 0.7))
@@ -191,9 +193,7 @@ mtext(side = 2, cex = 0.7, line = 0.25, "Density")
 dev.off()
 
 
-
-
-
+# figure 2
 
 tiff("fig2.tiff", width = 6.5, height = 4, units = "in", res = 200)
 
@@ -324,3 +324,7 @@ text(-1.1, 2.06, "Rolling origin end-sample testing", cex = 0.7, font = 3,
      xpd = NA, adj = 0)
 
 dev.off()
+
+
+# figure 3
+

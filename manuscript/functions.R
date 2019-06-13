@@ -1,10 +1,31 @@
 
-blank <- function(...){
-  plot(1, 1, type = "n", xlab = "", ylab = "", xaxt = "n", yaxt = "n", ...)
+#
+# figure functions to be pulled out to bbplot are in other scripts
+
+
+density.default
+
+
+mass <- function(x, min = NULL, max = NULL){
+  xin <- na.omit(x)
+  N <- length(xin)
+  min <- if_null(min, min(xin))
+  max <- if_null(max, max(xin))
+  x <- seq.int(min, max)
+  nx <- length(x)
+  yraw <- rep(NA, nx)
+  for(i in 1:nx){
+    yraw[i] <- length(xin[xin == x[i]])
+  }
+  y <- yraw / N
+  out <- list(x = x, y = y, n = N)
+  class(out) <- c("mass", "list")
+  out
 }
 
 
-
+#
+#
 make_eval_tab <- function(mod1, mod2, mod3, mod4){
   npitc <- ncol(mod1[[1]]$eval$PIT)
   evalmat <- matrix(NA, nrow = 4 * length(mod1) * 12, ncol = 6 + npitc)
@@ -92,11 +113,11 @@ save_without_models <- function(modobj, file){
 
 # adapted from Czado, Gneiting and Held, Biometrics
 
-nrPIT <- function(x, cdf, n_bins = 10){
+nrPIT <- function(x, cdf, n_bins = 10, ...){
   a.mat <- matrix(0,n_bins,length(x))
   for (i in 1:length(x)){
-    Px <- cdf(x[i])
-    Px1 <- cdf(x[i] - 1)
+    Px <- cdf(x[i], ...)
+    Px1 <- cdf(x[i] - 1, ...)
     k.vec <- pmax(ceiling(n_bins*Px1),1)
     m.vec <- ceiling(n_bins*Px)
     d.vec <- Px-Px1
