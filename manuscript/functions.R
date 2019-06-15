@@ -1,4 +1,23 @@
 
+load_models <- function(modns, small = FALSE){
+  if (small){
+    fnames <- paste0("model_output/mod", modns, "_withoutmodels.RData")
+  } else{
+    fnames <- paste0("model_output/mod", modns, "_withmodels.RData")
+  }
+  for(i in 1:length(modns)){
+    load(fnames[i], envir = parent.frame(n = 2))
+  }
+}
+
+
+summarize_abunds <- function(x, digits = 2){
+  x2 <- na.omit(x)
+  out <- c(n = length(x2), min = min(x2), max = max(x2), median = median(x2),
+           mean = mean(x2), var = var(x2), skewness = skewness(x2))
+  round(out, digits)
+}
+
 #
 # figure functions to be pulled out to bbplot are in other scripts
 
@@ -419,7 +438,7 @@ mods <- function(model = NULL, abunds = NULL, moon_dates = NULL,
                  in_timeseries = list(1:500), lead_time = 12, 
                  n_chains = 3, n_burnin = 5000, n_sample = 10000, n_thin = 1,
                  n_bins = 10, n_adapt = 1000, keeploc = FALSE, quiet = FALSE,
-                 save_preds = FALSE){
+                 save_preds = FALSE, save_raw = TRUE, save_small = TRUE){
   out <- vector("list", length = length(in_timeseries))
   for(i in 1:length(in_timeseries)){
     out[[i]] <- tryCatch(
@@ -433,6 +452,25 @@ mods <- function(model = NULL, abunds = NULL, moon_dates = NULL,
                        save_preds = save_preds),
                   error = function(x){NA})
     names(out)[i] <- run_namer(model, in_timeseries[[i]], lead_time)
+  }
+  modname <- paste0("mod", model)
+  assign(modname, out)
+  if (save_raw){
+    fname <- paste0("model_output/mod", model, "_withmodels.RData")
+    save(list = modname, file = fname)
+  }
+  if (save_small){
+    fname <- paste0("model_output/mod", model, "_withoutmodels.RData")
+
+
+    out2 <- vector("list", length = length(out))
+    for(i in 1:length(out)){
+      out2[[i]] <- list(summary = out[[i]]$summary, data = out[[i]]$data,
+                        meta = out[[i]]$meta, eval = out[[i]]$eval)
+    }
+    names(out2) <- names(out)
+    assign(modname, out2)
+    save(list = modname, file = fname)
   }
   out 
 }
