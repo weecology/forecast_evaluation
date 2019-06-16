@@ -1,4 +1,4 @@
-# model 1: random walk (MR(1))
+# model 1: random walk 
 model {  
    # priors on parameters
    mu ~ dnorm(log(meanY), 0.25); 

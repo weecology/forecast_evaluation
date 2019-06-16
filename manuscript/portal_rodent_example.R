@@ -19,10 +19,9 @@ in_ts <- training_ts(ends = 10:500)
 # mod1 <- mods(1, abunds, moon_dates, in_ts)
 # mod2 <- mods(2, abunds, moon_dates, in_ts)
 # mod3 <- mods(3, abunds, moon_dates, in_ts)
-# mod4 <- mods(4, abunds, moon_dates, in_ts)
 
-load_models(1:4, small = TRUE)
-eval_tab <- make_eval_tab(mod1, mod2, mod3, mod4)
+load_models(1:3)
+eval_tab <- make_eval_tab(mod1, mod2, mod3)
 
 
 

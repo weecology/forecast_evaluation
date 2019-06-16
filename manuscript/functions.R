@@ -13,7 +13,8 @@ load_models <- function(modns, small = FALSE){
 
 summarize_abunds <- function(x, digits = 2){
   x2 <- na.omit(x)
-  out <- c(n = length(x2), min = min(x2), max = max(x2), median = median(x2),
+  out <- c(n_all = length(x), n = length(x2), min = min(x2), max = max(x2), 
+           median = median(x2),
            mean = mean(x2), var = var(x2), skewness = skewness(x2))
   round(out, digits)
 }
@@ -105,13 +106,13 @@ mass <- function(x, min = NULL, max = NULL){
 
 #
 #
-make_eval_tab <- function(mod1, mod2, mod3, mod4){
+make_eval_tab <- function(mod1, mod2, mod3){
   npitc <- ncol(mod1[[1]]$eval$PIT)
-  evalmat <- matrix(NA, nrow = 4 * length(mod1) * 12, ncol = 6 + npitc)
+  evalmat <- matrix(NA, nrow = 3 * length(mod1) * 12, ncol = 6 + npitc)
   spots <- 0
 
   for(i in 1:length(mod1)){
-    for(j in 1:4){
+    for(j in 1:3){
       obj <- eval(parse(text = paste0("mod", j)))
       if (i <= length(obj)){
         lead <- obj[[i]]$meta$lead_time
@@ -245,17 +246,6 @@ inits_fun <- function(model){
                   mu = rnorm(1, 0, 1),
                   tau.pro = rgamma(1, shape = 0.1, rate = 0.1),
                   phi = runif(1, -0.95, 0.95),
-                  beta1 = rnorm(1, 0, 2),
-                  beta2 = rnorm(1, 0, 2))
-           }
-  }
-  if (model == 4){
-    out <- function(chain = chain){
-             list(.RNG.name = sample(rngs, 1),
-                  .RNG.seed = sample(1:1e+06, 1),
-                  mu = rnorm(1, 0, 1),
-                  tau.pro = rgamma(1, shape = 0.1, rate = 0.1),
-                  phi = runif(1, -0.95, 0.95),
                   theta = runif(1, -0.95, 0.95))
            }
   }
@@ -270,9 +260,6 @@ monitor_fun <- function(model, meta = NULL, obs = TRUE, obstype = "lead"){
     out <- c("sd.q", "mu", "phi")
   }
   if (model == 3){
-    out <- c("sd.q", "mu", "phi", "beta1", "beta2")
-  }
-  if (model == 4){
     out <- c("sd.q", "mu", "phi", "theta")
   }
   if (obs){
@@ -300,46 +287,15 @@ fod <- function(dates){
 
 data_fun <- function(model, abunds, in_timeseries, lead_time, 
                      moon_dates = NULL){
-  if (model == 1){
+  if(model %in% 1:3){
     Y <- c(abunds[in_timeseries], rep(NA, lead_time))
     meanY <- mean(Y, na.rm = TRUE)
-    out <- list(Y = Y, N = length(Y), meanY = meanY)
+    list(Y = Y, N = length(Y), meanY = meanY)
   }
-  if (model == 2){
-    Y <- c(abunds[in_timeseries], rep(NA, lead_time))
-    meanY <- mean(Y, na.rm = TRUE)
-    out <- list(Y = Y, N = length(Y), meanY = meanY)
-  }
-  if (model == 3){
-    all_in <- (min(in_timeseries)):(max(in_timeseries) + lead_time)    
-    frde <- fod(moon_dates[all_in])
-    Y <- c(abunds[in_timeseries], rep(NA, lead_time))
-    meanY <- mean(Y, na.rm = TRUE)
-    out <- list(Y = Y, N = length(Y), meanY = meanY,
-                sinde = sin(frde), cosde = cos(frde))
-  }
-  if (model == 4){
-    Y <- c(abunds[in_timeseries], rep(NA, lead_time))
-    meanY <- mean(Y, na.rm = TRUE)
-    out <- list(Y = Y, N = length(Y), meanY = meanY)
-  }
-  out
 }
 
 name_fun <- function(model){
-  if (model == 1){
-    out <- "model_scripts/mod1.txt"
-  }
-  if (model == 2){
-    out <- "model_scripts/mod2.txt"
-  }
-  if (model == 3){
-    out <- "model_scripts/mod3.txt"
-  }
-  if (model == 4){
-    out <- "model_scripts/mod4.txt"
-  }
-  out
+  paste0("model_scripts/mod", model, ".txt")
 }
 
 
