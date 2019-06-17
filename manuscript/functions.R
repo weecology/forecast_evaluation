@@ -24,6 +24,80 @@ summarize_abunds <- function(x, digits = 2){
 
 
 
+
+fig4_row <- function(x, draws, spits, frow, minx = 1, maxx = 30, nxs = 30, 
+                     n_bins = 10, ym1 = 35, ym2 = 35, wex = 1.45, 
+                     steps = 1:length(x), minstep = 490,
+                     maxstep = 513, buff = 0.35, minp = 1e-3, vwidth = 0.5, 
+                     xrange = 0:25, vxs = 501:512, vc = rgb(0.6, 0.6, 0.6), 
+                     poc = rgb(0.4, 0.4, 0.4, 0.15),
+                     nfrows = 5, jitv = 0.4, seed = 1234, title = NULL){
+  set.seed(seed)
+  topoffset <- 0.94
+  rtop <- topoffset - ((frow - 1) * topoffset) / nfrows
+  rbot <- max(c(0, rtop - topoffset / nfrows))
+
+  par(fig = c(0, 0.5, rbot, rtop), mar = c(1, 1, 1.25, 0.5), 
+       new = TRUE)
+
+  blank(bty = "L", xlim = c(minstep - buff, maxstep + buff), ylim = c(0, ym1))
+  nvxs <- length(vxs)
+  for(j in 1:nvxs){
+    vx <- vxs[j] - 500 
+    violin(draws[, vx], vxs[vx], wex = wex, col = vc, border = NA)
+  }
+  points(steps[steps >= minstep], x[steps >= minstep], cex = 0.4, pch = 16)
+  axis(side = 2, at = seq(0, ym1, 5), tck = -0.01, labels = FALSE)
+  axis(side = 2, at = seq(0, ym1, 10), tck = -0.03, labels = FALSE)
+  mtext(side = 2, at = seq(0, ym1, 10), seq(0, ym1, 10), xpd = NA, las = 1,
+        line = 0.25, cex = 0.5)
+  axis(side = 1, at = seq(490, 515, 5), tck = -0.01, labels = FALSE)
+  axis(side = 1, at = seq(490, 510, 10), tck = -0.03, labels = FALSE)
+  axis(side = 1, at = 489.1, tck = -0.08, labels = FALSE)
+  mtext(side = 1, at = 489.1, line = 0., cex = 0.5, "2017")
+  axis(side = 1, at = 501.4, tck = -0.08, labels = FALSE)
+  mtext(side = 1, at = 501.4, line = 0., cex = 0.5, "2018")
+  axis(side = 1, at = 513.8, tck = -0.08, labels = FALSE)
+  mtext(side = 1, at = 513.8, line = 0., cex = 0.5, "2019")
+
+
+  par(fig = c(0, 1, rtop - 0.1, rtop), new = TRUE)
+  blank()
+  text(x = 0.575, y = 1.65, title, cex = 0.75, xpd = NA, adj = 0)
+
+  par(fig = c(0.5, 0.75, rbot, rtop), new = TRUE)
+
+  blank(bty = "L", xlim = c(0, ym2), ylim = c(0, ym2))
+  abline(a = 0 , b = 1)
+  
+  for(i in 1:nvxs){
+    specs <- sample(1:nrow(draws), 100)
+    xx <- draws[specs,i]
+    yy <- rep(x[i+500], length(xx))
+    xx2 <- xx + runif(length(yy), -jitv, jitv)
+    yy2 <- yy + runif(length(yy), -jitv, jitv)
+    points(xx2, yy2, col = poc, cex = 0.75)
+  }
+
+  axis(side = 1, at = seq(0, ym1, 5), tck = -0.01, labels = FALSE)
+  axis(side = 1, at = seq(0, ym1, 10), tck = -0.03, labels = FALSE)
+  mtext(side = 1, at = seq(0, ym1, 10), seq(0, ym1, 10), xpd = NA, las = 1,
+        line = -0.25, cex = 0.5)
+  axis(side = 2, at = seq(0, ym1, 5), tck = -0.01, labels = FALSE)
+  axis(side = 2, at = seq(0, ym1, 10), tck = -0.03, labels = FALSE)
+  mtext(side = 2, at = seq(0, ym1, 10), seq(0, ym1, 10), xpd = NA, las = 1,
+        line = 0.25, cex = 0.5)
+
+  par(fig = c(0.75, 1, rbot, rtop), new = TRUE)
+
+  blank(xlim = c(1, 10), ylim = c(0, max(spits) * 1.25), bty = "L")
+  abline(h = 1, lty = 3)
+  points(spits, type = "h", lwd = 2)
+
+}
+
+
+
 fig3_row <- function(x, draws, frow, minx = 1, maxx = 30, nxs = 30, 
                      n_bins = 10, ym1 = 35, ym2 = 45, wex = 1.45, 
                      steps = 1:length(x), minstep = 1,
@@ -246,8 +320,9 @@ inits_fun <- function(model){
                   mu = rnorm(1, 0, 1),
                   tau.pro = rgamma(1, shape = 0.1, rate = 0.1),
                   phi = runif(1, -0.95, 0.95),
-                  theta = runif(1, -0.95, 0.95))
-           }
+                  beta1 = rnorm(1, 0, 2),
+                  beta2 = rnorm(1, 0, 2))
+    }
   }
   out
 }
@@ -260,11 +335,12 @@ monitor_fun <- function(model, meta = NULL, obs = TRUE, obstype = "lead"){
     out <- c("sd.q", "mu", "phi")
   }
   if (model == 3){
-    out <- c("sd.q", "mu", "phi", "theta")
+    out <- c("sd.q", "mu", "phi", "beta1", "beta2")
   }
   if (obs){
     if (obstype == "lead"){
-      ptimes <- max(meta$in_timeseries) + 1:meta$lead_time
+      ptimes <- max(meta$in_timeseries) + 1:meta$lead_time - 
+                min(meta$in_timeseries) + 1
       preds <- paste0("predY[", ptimes, "]")
       out <- c(out, preds)
     }
@@ -275,23 +351,31 @@ monitor_fun <- function(model, meta = NULL, obs = TRUE, obstype = "lead"){
   out
 }
 
-fod <- function(dates){
+foy <- function(dates){
   dates <- as.Date(dates)
   yr <- format(dates, "%Y")
-  yr0 <- paste0(substr(yr, 1, 3), "0")
-  yr9 <- paste0(substr(yr, 1, 3), "9")
-  nyd <- as.Date(paste0(yr0, "-01-01"))
-  nye <- as.Date(paste0(yr9, "-12-31"))
-  round(as.numeric((dates - nyd))/as.numeric((nye - nyd)), 4)
+  nye <- as.Date(paste0(yr, "-12-31"))
+  jnye <- as.numeric(format(nye, "%j"))
+  jdates <- as.numeric(format(dates, "%j"))
+  round(jdates/jnye, 4)
 }
 
 data_fun <- function(model, abunds, in_timeseries, lead_time, 
                      moon_dates = NULL){
-  if(model %in% 1:3){
+  if(model %in% 1:2){
     Y <- c(abunds[in_timeseries], rep(NA, lead_time))
     meanY <- mean(Y, na.rm = TRUE)
-    list(Y = Y, N = length(Y), meanY = meanY)
+    out <- list(Y = Y, N = length(Y), meanY = meanY)
   }
+  if (model == 3){
+    all_in <- (min(in_timeseries)):(max(in_timeseries) + lead_time)    
+    fryr <- foy(moon_dates[all_in])
+    Y <- c(abunds[in_timeseries], rep(NA, lead_time))
+    meanY <- mean(Y, na.rm = TRUE)
+    out <- list(Y = Y, N = length(Y), meanY = meanY,
+                sinyr = sin(fryr), cosyr = cos(fryr))
+  }
+  out 
 }
 
 name_fun <- function(model){
@@ -348,7 +432,7 @@ eval_mod <- function(model = NULL, mod = NULL, abunds = NULL,
   if (!all(is.na(mod))){
     jags_data <- data_fun(model, abunds, in_timeseries, lead_time, moon_dates)
 
-    ptimes <- max(in_timeseries) + 1:lead_time
+    ptimes <- max(in_timeseries) + 1:lead_time - min(in_timeseries) + 1
     preds <- paste0("predY[", ptimes, "]")
 
     m <- as.mcmc(combine.mcmc(as.mcmc.list(mod), collapse.chains = TRUE))
