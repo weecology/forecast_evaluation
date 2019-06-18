@@ -25,12 +25,13 @@ summarize_abunds <- function(x, digits = 2){
 
 
 
-fig4_row <- function(x, draws, spits, frow, minx = 1, maxx = 30, nxs = 30, 
+fig4_row <- function(x, draws, draws2, spits, frow, minx = 1, maxx = 30, 
+                     nxs = 30, 
                      n_bins = 10, ym1 = 35, ym2 = 35, wex = 1.45, 
                      steps = 1:length(x), minstep = 490,
                      maxstep = 513, buff = 0.35, minp = 1e-3, vwidth = 0.5, 
                      xrange = 0:25, vxs = 501:512, vc = rgb(0.6, 0.6, 0.6), 
-                     poc = rgb(0.4, 0.4, 0.4, 0.15),
+                     poc = rgb(0.4, 0.4, 0.4, 0.1),
                      nfrows = 5, jitv = 0.4, seed = 1234, title = NULL){
   set.seed(seed)
   topoffset <- 0.94
@@ -67,13 +68,13 @@ fig4_row <- function(x, draws, spits, frow, minx = 1, maxx = 30, nxs = 30,
 
   par(fig = c(0.5, 0.75, rbot, rtop), new = TRUE)
 
-  blank(bty = "L", xlim = c(0, ym2), ylim = c(0, ym2))
+  blank(bty = "L", xlim = c(-1, ym2), ylim = c(-1, ym2))
   abline(a = 0 , b = 1)
   
   for(i in 1:nvxs){
-    specs <- sample(1:nrow(draws), 100)
-    xx <- draws[specs,i]
-    yy <- rep(x[i+500], length(xx))
+    specs <- sample(1:nrow(draws2), 100)
+    xx <- draws2[specs,i]
+    yy <- rep(x[i+488], length(xx))
     xx2 <- xx + runif(length(yy), -jitv, jitv)
     yy2 <- yy + runif(length(yy), -jitv, jitv)
     points(xx2, yy2, col = poc, cex = 0.75)
@@ -300,16 +301,16 @@ inits_fun <- function(model){
     out <- function(chain = chain){
              list(.RNG.name = sample(rngs, 1),
                   .RNG.seed = sample(1:1e+06, 1),
-                  mu = rnorm(1, 0, 1),
-                  tau.pro = rgamma(1, shape = 0.1, rate = 0.1))
+                  mu0 = rnorm(1, 0, 1),
+                  tau = rgamma(1, shape = 0.1, rate = 0.1))
            }
   }
   if (model == 2){
     out <- function(chain = chain){
              list(.RNG.name = sample(rngs, 1),
                   .RNG.seed = sample(1:1e+06, 1),
-                  mu = rnorm(1, 0, 1),
-                  tau.pro = rgamma(1, shape = 0.1, rate = 0.1),
+                  mu0 = rnorm(1, 0, 1),
+                  tau = rgamma(1, shape = 0.1, rate = 0.1),
                   phi = runif(1, -0.95, 0.95))
            }
   }
@@ -317,8 +318,8 @@ inits_fun <- function(model){
     out <- function(chain = chain){
              list(.RNG.name = sample(rngs, 1),
                   .RNG.seed = sample(1:1e+06, 1),
-                  mu = rnorm(1, 0, 1),
-                  tau.pro = rgamma(1, shape = 0.1, rate = 0.1),
+                  mu0 = rnorm(1, 0, 1),
+                  tau = rgamma(1, shape = 0.1, rate = 0.1),
                   phi = runif(1, -0.95, 0.95),
                   beta1 = rnorm(1, 0, 2),
                   beta2 = rnorm(1, 0, 2))
@@ -329,13 +330,13 @@ inits_fun <- function(model){
 
 monitor_fun <- function(model, meta = NULL, obs = TRUE, obstype = "lead"){
   if (model == 1){
-    out <- c("sd.q", "mu")
+    out <- c("sd", "mu0")
   }
   if (model == 2){
-    out <- c("sd.q", "mu", "phi")
+    out <- c("sd", "mu0", "phi")
   }
   if (model == 3){
-    out <- c("sd.q", "mu", "phi", "beta1", "beta2")
+    out <- c("sd", "mu0", "phi", "beta1", "beta2")
   }
   if (obs){
     if (obstype == "lead"){
@@ -457,8 +458,8 @@ eval_mod <- function(model = NULL, mod = NULL, abunds = NULL,
       yyy <- abunds[time_spot]
       if(!is.na(yyy)){
         dist <- ys[ , i]
-        s_r[i] <- crps_sample(y = yyy, dat = dist)
-        s_l[i] <- -log(length(dist[dist==yyy])/length(dist))
+        s_r[i] <- -crps_sample(y = yyy, dat = dist)
+        s_l[i] <- log(length(dist[dist==yyy])/length(dist))
         PIT[i, ] <- nrPIT(yyy, ecdf(dist), n_bins)
       }
     }

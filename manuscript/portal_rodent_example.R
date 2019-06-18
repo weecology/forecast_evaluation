@@ -27,7 +27,12 @@ eval_tab <- make_eval_tab(mod1, mod2, mod3)
 
 
 # working space
-# building out Fig 4 and the ensemble
+
+
+
+
+
+# building out Fig 4 and the ensembles
 
 
 set.seed(321)
@@ -35,6 +40,7 @@ set.seed(321)
 
 tiff("fig4.tiff", width = 6, height = 7, units = "in", res = 200)
 
+mxv <- 1e4
 
 
 topoffset <- 0.94
@@ -57,13 +63,24 @@ m1 <- as.mcmc(combine.mcmc(as.mcmc.list(mod1[[201]]$model),
 yy1 <- matrix(NA, nrow = nrow(m1), ncol = 12)
 for(i in 302:313){
   yy1[,i-301] <- rpois(nrow(m1), m1[,paste0("predY[", i, "]")])
+  maxout <- which(yy1[,i-301] > maxv)
+  yy1[maxout,i-301] <- maxv
 }
 
-rs <- which(eval_tab$model == 1)
+
+mm1 <- as.mcmc(combine.mcmc(as.mcmc.list(mod1[[180]]$model), 
+                          collapse.chains = TRUE))
+yyy1 <- matrix(NA, nrow = nrow(mm1), ncol = 12)
+for(i in 281:292){
+  yyy1[,i-280] <- rpois(nrow(mm1), mm1[,paste0("predY[", i, "]")])
+}
+
+
+rs <- which(eval_tab$model == 1 & eval_tab$destin < 500)
 cs <- grep("PIT", colnames(eval_tab))
 PIT_m1 <- apply(eval_tab[rs, cs], 2, mean, na.rm = TRUE)
 
-fig4_row(abunds, yy1, PIT_m1, 1, title = "RW")
+fig4_row(abunds, yy1, yyy1, PIT_m1, 1, title = "RW")
 
 
 m2 <- as.mcmc(combine.mcmc(as.mcmc.list(mod2[[201]]$model), 
@@ -73,11 +90,19 @@ for(i in 302:313){
   yy2[,i-301] <- rpois(nrow(m2), m2[,paste0("predY[", i, "]")])
 }
 
-rs <- which(eval_tab$model == 2)
+mm2 <- as.mcmc(combine.mcmc(as.mcmc.list(mod2[[180]]$model), 
+                          collapse.chains = TRUE))
+yyy2 <- matrix(NA, nrow = nrow(mm2), ncol = 12)
+for(i in 281:292){
+  yyy2[,i-280] <- rpois(nrow(mm2), mm2[,paste0("predY[", i, "]")])
+}
+
+
+rs <- which(eval_tab$model == 2 & eval_tab$destin < 500)
 cs <- grep("PIT", colnames(eval_tab))
 PIT_m2 <- apply(eval_tab[rs, cs], 2, mean, na.rm = TRUE)
 
-fig4_row(abunds, yy2, PIT_m2, 2, title = "AR(1)")
+fig4_row(abunds, yy2, yyy2, PIT_m2, 2, title = "AR(1)")
 
 
 m3 <- as.mcmc(combine.mcmc(as.mcmc.list(mod3[[201]]$model), 
@@ -87,21 +112,78 @@ for(i in 302:313){
   yy3[,i-301] <- rpois(nrow(m3), m3[,paste0("predY[", i, "]")])
 }
 
-rs <- which(eval_tab$model == 3)
+mm3 <- as.mcmc(combine.mcmc(as.mcmc.list(mod3[[180]]$model), 
+                          collapse.chains = TRUE))
+yyy3 <- matrix(NA, nrow = nrow(mm3), ncol = 12)
+for(i in 281:292){
+  yyy3[,i-280] <- rpois(nrow(mm3), mm3[,paste0("predY[", i, "]")])
+}
+
+
+rs <- which(eval_tab$model == 3 & eval_tab$destin < 500)
 cs <- grep("PIT", colnames(eval_tab))
 PIT_m3 <- apply(eval_tab[rs, cs], 2, mean, na.rm = TRUE)
 
-fig4_row(abunds, yy3, PIT_m3, 3, title = "cAR(1)")
+fig4_row(abunds, yy3, yyy3, PIT_m3, 3, title = "cAR(1)")
 
 
 
 yy4 <- rbind(yy1, yy2, yy3)
+yyy4 <- rbind(yyy1, yyy2, yyy3)
 
+rs <- which(eval_tab$destin < 500)
 cs <- grep("PIT", colnames(eval_tab))
-PIT_m4 <- apply(eval_tab[, cs], 2, mean, na.rm = TRUE)
+PIT_m4 <- apply(eval_tab[rs, cs], 2, mean, na.rm = TRUE)
 
-fig4_row(abunds, yy4, PIT_m4, 4, title = "Naïve Ensemble")
+fig4_row(abunds, yy4, yyy4, PIT_m4, 4, title = "Naïve Ensemble")
 
 
 dev.off()
+
+
+
+  lead <- eval_tab$lead
+  crps <- eval_tab$crps
+  logs <- eval_tab$logs
+  model <- eval_tab$model
+  origin <- eval_tab$origin
+  destin <- eval_tab$destin
+  
+
+
+m1 <-mean(logs[model==1&lead==12&destin<501], na.rm = TRUE)
+m2 <-mean(logs[model==2&lead==12&destin<501], na.rm = TRUE)
+m3 <-mean(logs[model==3&lead==12&destin<501], na.rm = TRUE)
+
+(m2-m1)/(0-m1)
+(m3-m1)/(0-m1)
+
+m1 <-mean(crps[model==1&lead==12&destin<501], na.rm = TRUE)
+m2 <-mean(crps[model==2&lead==12&destin<501], na.rm = TRUE)
+m3 <-mean(crps[model==3&lead==12&destin<501], na.rm = TRUE)
+
+(m2-m1)/(0-m1)
+(m3-m1)/(0-m1)
+
+mean(crps[model==1 & lead==1], na.rm = TRUE)
+mean(crps[model==2 & lead==1], na.rm = TRUE)
+mean(crps[model==3 & lead==1], na.rm = TRUE)
+
+mean(logs[model==1 & lead==1], na.rm = TRUE)
+mean(logs[model==2 & lead==1], na.rm = TRUE)
+mean(logs[model==3 & lead==1], na.rm = TRUE)
+
+
+mean(crps[model==1 & lead==12], na.rm = TRUE)
+mean(crps[model==2 & lead==12], na.rm = TRUE)
+mean(crps[model==3 & lead==12], na.rm = TRUE)
+
+mean(logs[model==1 & lead==12], na.rm = TRUE)
+mean(logs[model==2 & lead==12], na.rm = TRUE)
+mean(logs[model==3 & lead==12], na.rm = TRUE)
+
+plot(jitter(lead[origin>480], 1.5), crps[origin>480], col = model[origin>480])
+
+plot(lead[origin==500], crps[origin==500], col = model[origin==500])
+
 

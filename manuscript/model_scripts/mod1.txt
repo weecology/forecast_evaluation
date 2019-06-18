@@ -1,17 +1,17 @@
 # model 1: random walk 
 model {  
    # priors on parameters
-   mu ~ dnorm(log(meanY), 0.25); 
-   tau.pro ~ dgamma(0.1,0.1); 
-   sd.q <- 1/sqrt(tau.pro);
+   mu0 ~ dnorm(log(meanY), 0.25); 
+   tau ~ dgamma(0.1,0.1); 
+   sd <- 1/sqrt(tau);
    
-   X[1] <- mu;
+   X[1] <- mu0;
    predY[1] <- exp(X[1]);
    Y[1] ~ dpois(exp(X[1]));
 
    for(i in 2:N) {
       predX[i] <- X[i-1];
-      checkX[i] ~ dnorm(predX[i], tau.pro); # Process variation
+      checkX[i] ~ dnorm(predX[i], tau); # Process variation
       X[i] <- min(c(checkX[i], 18)); # Enforce ceiling to avoid overflow
       predY[i] <- exp(X[i]);
       Y[i] ~ dpois(exp(X[i])); # Observation variation
