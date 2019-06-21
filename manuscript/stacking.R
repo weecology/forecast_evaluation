@@ -85,6 +85,21 @@ colnames(stack_fit) <- c("origin", "possible_N", "actual_N",
                          "wt_m1", "wt_m2", "wt_m3", "delta")
 
 stack_fit<-data.frame(stack_fit)
+par(mfrow=c(2,1), mar = c(3,3,1,1), bty = "L")
 plot(stack_fit$origin, stack_fit$wt_m1, ylim=c(0,1), type = "l")
 points(stack_fit$origin, stack_fit$wt_m2, ylim=c(0,1), type = "l", col=2)
 points(stack_fit$origin, stack_fit$wt_m3, ylim=c(0,1), type = "l", col=3)
+
+gg<-matrix(NA, nrow = 10, ncol = 3)
+for(i in 1:10){
+gg[i,1] <- runif(1, 0.1, 0.3)
+gg[i,2] <- runif(1, 0.1, 0.3)
+gg[i,3] <- 1 - gg[i,1] - gg[i,2]
+}
+gg <- as.matrix(stack_fit[,4:6])
+tt <- stack_fit[,1]
+sm <- multinom(gg~tt, weights=stack_fit[,3])
+
+points(tt,sm$fitted.values[,1],type="l", lwd=2,lty=2)
+points(tt,sm$fitted.values[,2],type="l", lwd=2,lty=2,col=2)
+points(tt,sm$fitted.values[,3],type="l", lwd=2,lty=2,col=3)

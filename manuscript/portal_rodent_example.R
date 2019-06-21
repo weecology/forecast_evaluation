@@ -9,8 +9,6 @@ source("functions.R")
 # download_observations()
 
 abunds <- plot_sp_abunds(plot = 19, species = "PP")
-plot(abunds, xlim = c(200, 520), type = "l")
-
 moon_dates <- load_trapping_data(clean = FALSE)$newmoons_table$newmoondate
 
 summarize_abunds(abunds[200:length(abunds)])
@@ -18,29 +16,27 @@ summarize_abunds(abunds[200:length(abunds)])
 in_ts <- training_ts(starts = 200, ends = 300:500)
 
 # only run if models have not yet been fit
- mod1 <- mods(1, abunds, moon_dates, in_ts)
- mod2 <- mods(2, abunds, moon_dates, in_ts)
- mod3 <- mods(3, abunds, moon_dates, in_ts)
+# mod1 <- mods(1, abunds, moon_dates, in_ts)
+# mod2 <- mods(2, abunds, moon_dates, in_ts)
+# mod3 <- mods(3, abunds, moon_dates, in_ts)
 
 load_models(1:3)
 eval_tab <- make_eval_tab(mod1, mod2, mod3)
 
 
+fig4(abunds, moon_dates)
+
 # working space
 
-
-
-
-
-# building out Fig 4 and the ensembles
+# building out Fig 5 and the ensembles
 
 
 set.seed(321)
 
 
-tiff("fig4.tiff", width = 6, height = 7, units = "in", res = 200)
+tiff("fig5.tiff", width = 6, height = 7, units = "in", res = 200)
 
-mxv <- 1e4
+maxv <- 5e3
 
 
 topoffset <- 0.94
@@ -68,11 +64,11 @@ for(i in 302:313){
 }
 
 
-mm1 <- as.mcmc(combine.mcmc(as.mcmc.list(mod1[[180]]$model), 
+mm1 <- as.mcmc(combine.mcmc(as.mcmc.list(mod1[[189]]$model), 
                           collapse.chains = TRUE))
 yyy1 <- matrix(NA, nrow = nrow(mm1), ncol = 12)
-for(i in 281:292){
-  yyy1[,i-280] <- rpois(nrow(mm1), mm1[,paste0("predY[", i, "]")])
+for(i in 290:301){
+  yyy1[,i-289] <- rpois(nrow(mm1), mm1[,paste0("predY[", i, "]")])
 }
 
 
@@ -90,11 +86,11 @@ for(i in 302:313){
   yy2[,i-301] <- rpois(nrow(m2), m2[,paste0("predY[", i, "]")])
 }
 
-mm2 <- as.mcmc(combine.mcmc(as.mcmc.list(mod2[[180]]$model), 
+mm2 <- as.mcmc(combine.mcmc(as.mcmc.list(mod2[[189]]$model), 
                           collapse.chains = TRUE))
 yyy2 <- matrix(NA, nrow = nrow(mm2), ncol = 12)
-for(i in 281:292){
-  yyy2[,i-280] <- rpois(nrow(mm2), mm2[,paste0("predY[", i, "]")])
+for(i in 290:301){
+  yyy2[,i-289] <- rpois(nrow(mm2), mm2[,paste0("predY[", i, "]")])
 }
 
 
@@ -112,11 +108,11 @@ for(i in 302:313){
   yy3[,i-301] <- rpois(nrow(m3), m3[,paste0("predY[", i, "]")])
 }
 
-mm3 <- as.mcmc(combine.mcmc(as.mcmc.list(mod3[[180]]$model), 
+mm3 <- as.mcmc(combine.mcmc(as.mcmc.list(mod3[[189]]$model), 
                           collapse.chains = TRUE))
 yyy3 <- matrix(NA, nrow = nrow(mm3), ncol = 12)
-for(i in 281:292){
-  yyy3[,i-280] <- rpois(nrow(mm3), mm3[,paste0("predY[", i, "]")])
+for(i in 290:301){
+  yyy3[,i-289] <- rpois(nrow(mm3), mm3[,paste0("predY[", i, "]")])
 }
 
 

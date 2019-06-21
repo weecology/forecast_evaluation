@@ -1,4 +1,108 @@
 
+
+
+draw_predictive_dists <- function(models, origin, list_spot = origin-299, 
+                                 max_lead_time = 12, last_in = 500,
+                                 seed = NULL, n = NULL){
+
+  nmodels <- length(models)
+  mds <- vector("list", length = nmodels)
+  nsamps <- rep(NA, length = nmodels)
+  for(i in 1:nmodels){
+    mds[[i]] <- as.mcmc(
+                combine.mcmc(
+                as.mcmc.list(
+                  models[[1]][[list_spot]]$model), collapse.chains = TRUE))
+    nsamps[i] <- nrow(mds[[i]])
+  }
+  if(is.null(n)){
+    n <- max(nsamps)
+  }
+  yyy <- array(NA, dim = c(n, max_lead_time, nmodels))
+  for(i in 1:nmodels){
+    yyy[,,i] <- draw_predictive_dist(models[[i]], origin, list_spot,
+                                     max_lead_time, last_in, seed, n)
+  }
+  yyy
+}
+
+
+draw_predictive_dist <- function(model, origin, list_spot = origin-299, 
+                                 max_lead_time = 12, last_in = 500,
+                                 seed = NULL, n = NULL){
+  
+  lead_time <- length(which((origin + 1:max_lead_time) <= last_in))
+
+  ini <- length(mod1[[list_spot]]$meta$in_timeseries) + 1
+  fini <- ini + lead_time
+  md <- as.mcmc(combine.mcmc(as.mcmc.list(model[[list_spot]]$model), 
+                            collapse.chains = TRUE))
+
+  if(is.null(n)){
+    n <- nrow(md)
+  }
+  yyy <- matrix(NA, nrow = n, ncol = lead_time)
+
+  set.seed(seed)
+  for(i in 1:lead_time){
+    lams <-  md[,paste0("predY[", (ini:fini)[i], "]")]
+    if(n != nrow(md)){
+      lams <- sample(lams, n, TRUE)
+    } 
+    yyy[,i] <- rpois(n, lams)
+  }
+  yyy
+}
+
+
+fig4 <- function(abunds, moon_dates){
+  tiff("fig4.tiff", width = 6, height = 3, units = "in", res = 200)
+
+  par(fig = c(0, 1, 0, 1), mar = c(1.25, 2.125, 1, 1))
+  daterange <- as.Date(c("1993-08-01", "2019-04-01"))
+  blank(bty = "L", xlim = daterange, ylim = c(-0.3, 18))
+  x <- as.Date(moon_dates[200:length(abunds)])
+  y <- abunds[200:length(abunds)]
+  set.seed(123)
+  yy <- y + runif(length(y), -0.25, 0.25)
+  nas <- which(is.na(y))
+  points(x[-nas], yy[-nas], type = "l", col = rgb(0.1, 0.1, 0.1, 0.5))
+  points(x, yy, cex = 0.6, pch = 16, col = rgb(1, 1, 1, 1))
+  points(x, yy, cex = 0.6, col = rgb(0.1, 0.1, 0.1, 0.5))
+  axis(2, at = seq(0, 15, 5), labels = FALSE, tck = -0.0225)
+  axis(2, at = seq(0, 15, 5), las = 1, lwd = 0, line = -0.5, cex.axis = 0.7)
+  axis(2, at = seq(0, 18, 1), labels = FALSE, tck = -0.01)
+  mtext(side = 2, line = 1.1, cex = 0.8, 
+        expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
+  datevals <- as.Date(paste0(1993:2020, "-01-01"))
+  axis(1, at = datevals, labels = FALSE, tck = -0.01)
+  datevals <- as.Date(paste0(seq(1995, 2020, 5), "-01-01"))
+  datelabs <- seq(1995, 2020, 5)
+  axis(1, at = datevals, labels = datelabs, lwd = 0, line = -0.9, 
+       cex.axis = 0.7)
+  axis(1, at = datevals, labels = FALSE, tck = -0.02)
+  
+  par(fig = c(0.1, 0.35, 0.5, 1), mar = c(1.25, 1.5, 1, 0.5), new = TRUE)
+  blank(bty = "L", xlim = c(-0.5, 17.5), ylim = c(0, 0.4))
+  tt <- table(abunds[200:length(abunds)])
+  points(tt/sum(tt))
+
+  axis(1, at = seq(0, 15, 5), labels = FALSE, tck = -0.025)
+  axis(1, at = seq(0, 15, 5), las = 1, lwd = 0, line = -1.25, cex.axis = 0.5)
+  axis(1, at = seq(0, 18, 1), labels = FALSE, tck = -0.015)
+  mtext(side = 1, line = 0.35, cex = 0.5, 
+        expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
+
+  axis(2, at = seq(0, 0.4, 0.1), labels = FALSE, tck = -0.025)
+  axis(2, at = seq(0, 0.4, 0.1), las = 1, lwd = 0, line = -0.75,
+       cex.axis = 0.5)
+  axis(2, at = seq(0, 0.4, 0.05), labels = FALSE, tck = -0.01)
+  mtext(side = 2, line = 1.1, cex = 0.5, "Frequency")
+
+  dev.off()
+}
+
+
 load_models <- function(modns, small = FALSE){
   if (small){
     fnames <- paste0("model_output/mod", modns, "_withoutmodels.RData")
