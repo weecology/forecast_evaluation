@@ -2,7 +2,7 @@
 
 
 draw_predictive_dists <- function(models, origin, list_spot = origin-299, 
-                                 max_lead_time = 12, last_in = 500,
+                                 max_lead_time = 12, last_in = Inf,
                                  seed = NULL, n = NULL){
 
   nmodels <- length(models)
@@ -18,7 +18,8 @@ draw_predictive_dists <- function(models, origin, list_spot = origin-299,
   if(is.null(n)){
     n <- max(nsamps)
   }
-  yyy <- array(NA, dim = c(n, max_lead_time, nmodels))
+  lead_time <- length(which((origin + 1:max_lead_time) <= last_in))
+  yyy <- array(NA, dim = c(n, lead_time, nmodels))
   for(i in 1:nmodels){
     yyy[,,i] <- draw_predictive_dist(models[[i]], origin, list_spot,
                                      max_lead_time, last_in, seed, n)
@@ -28,7 +29,7 @@ draw_predictive_dists <- function(models, origin, list_spot = origin-299,
 
 
 draw_predictive_dist <- function(model, origin, list_spot = origin-299, 
-                                 max_lead_time = 12, last_in = 500,
+                                 max_lead_time = 12, last_in = Inf,
                                  seed = NULL, n = NULL){
   
   lead_time <- length(which((origin + 1:max_lead_time) <= last_in))

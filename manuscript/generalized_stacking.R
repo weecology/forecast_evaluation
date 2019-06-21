@@ -1,39 +1,83 @@
 # working space
 
-dists <- draw_predictive_dists(list(mod1, mod2, mod3), 300)
-obs <- abunds[300 + 1:12]
-wts <- c(1/3, 1/3, 1/3)
+  mods <- list(mod1, mod2, mod3)
+  test_origins <- 300:499
+  ntos <- length(test_origins)
 
-dists<-dists[,1:2,]
-obs<-obs[1:2]
+  pars1 <- c(alr(c(1/3, 1/3, 1/3)))
+  names(pars1) <- c(paste0("twt", 1:2))
+  pars2 <- c(alr(c(1/3, 1/3, 1/3)), logp1(c(2, 2)))
+  names(pars2) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
 
-combined_cdf <- combine(dists1, wts, "cdf")
-combined_pdf <- combine(dists1, wts, "pdf")
-combined_draw <- combine(dists1, wts, "draw")
+  stack_tab <- matrix(NA, nrow = ntos * 4, ncol = 9)
+  rid <- 1
+  for(i in 1:ntos){
 
-score(combined_cdf, obs[1], "crps")
-score(combined_draw, obs[1], "crps")
-score(combined_pdf, obs[1], "logscore")
-score(combined_draw, obs[1], "logscore")
+    test_origin <- test_origins[i]
+print("#######################")
+print(paste0("test origin ", test_origin))
+    dists <- draw_predictive_dists(mods, test_origin, last_in = 500)
+    obs <- abunds[test_origin + 1:12]
 
-combined_series_cdf <- combine(dists, wts, "cdf")
-combined_series_pdf <- combine(dists, wts, "pdf")
-combined_series_draw <- combine(dists, wts, "draw")
+print("1")
+    fit1 <- tryCatch(
+              optim(pars1, ofn, dists = dists, obs = obs, rule = "crps", 
+                    linkname = "identity", control = list(fnscale = -1)),
+              error = function(x){list()})
+print("2")
+    fit2 <- tryCatch(
+               optim(pars2, ofn, dists = dists, obs = obs, rule = "crps", 
+                     linkname = "beta", control = list(fnscale = -1)),
+              error = function(x){list()})
+print("3")
+    fit3 <- tryCatch(
+              optim(pars1, ofn, dists = dists, obs = obs, rule = "logscore", 
+                    linkname = "identity", control = list(fnscale = -1)),
+              error = function(x){list()})
+print("4")
+    fit4 <- tryCatch(
+               optim(pars2, ofn, dists = dists, obs = obs, rule = "logscore", 
+                     linkname = "beta", control = list(fnscale = -1)),
+              error = function(x){list()})
 
-score(combined_series_cdf, obs, "crps")
-score(combined_series_draw, obs, "crps")
-score(combined_series_pdf, obs, "logscore")
-score(combined_series_draw, obs, "logscore")
+    stack_tab[rid + 0, ] <- c(test_origin, "crps", "id", 
+                              ialr(fit1$par), NA, NA, 
+                              fit1$val)
+    stack_tab[rid + 1, ] <- c(test_origin, "crps", "beta", 
+                              ialr(fit2$par[1:2]), ilogp1(fit2$par[3:4]), 
+                              fit2$val)
+    stack_tab[rid + 2, ] <- c(test_origin, "logscore", "id", 
+                              ialr(fit3$par), NA, NA, 
+                              fit3$val)
+    stack_tab[rid + 3, ] <- c(test_origin, "logscore", "beta", 
+                              ialr(fit4$par[1:2]), ilogp1(fit4$par[3:4]), 
+                              fit4$val)
+    rid <- rid + 4
+  }
 
 
 
-pars <- c(alr(c(1/3, 1/3, 1/3)), logp1(c(2, 2)))
-names(pars) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
-fit <- optim(pars, ofn, dists = dists, obs = obs, rule = "crps", 
-             linkname = "beta", control = list(fnscale = -1))
-ialr(fit$par[1:2])
-ilogp1(fit$par[3:4])
-fit$val
+stack_df <- data.frame(stack_tab, stringsAsFactors = FALSE)
+colnames(stack_df)<-c("origin", "rule", "link", paste0("wt", 1:3), 
+                      "b1", "b2", "val")
+
+for(i in c(1,4:9)){
+  stack_df[,i] <- as.numeric(stack_df[,i])
+}
+
+incl <- which(stack_df$rule == "logscore" & stack_df$link == "id")
+plot(stack_df$origin[incl], stack_df$wt1[incl], type = "l")
+points(stack_df$origin[incl], stack_df$wt2[incl], type = "l", col = 2)
+points(stack_df$origin[incl], stack_df$wt3[incl], type = "l", col = 3)
+
+
+incl <- which(stack_df$rule == "crps" & stack_df$link == "id")
+v1<-stack_df$val[incl]
+incl <- which(stack_df$rule == "crps" & stack_df$link == "beta")
+v2<-stack_df$val[incl]
+
+
+save(stack_df, file = "model_output/stack_df.RData")
 
 ############### functions
 
