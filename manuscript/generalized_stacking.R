@@ -1,53 +1,155 @@
 # working space
-# optim works alright to get weights fit now
-# things to do
-#  1. make combine work with a series or singularly
-#  2. make score work with a series or singularly
-#  3. add in a link function step (dist conversion)
-#  3. make it so you don't have to tell it what the format is
-
 
 dists <- draw_predictive_dists(list(mod1, mod2, mod3), 300)
-dists4 <- dists[,4,]
 obs <- abunds[300 + 1:12]
 wts <- c(1/3, 1/3, 1/3)
 
-
+dists<-dists[,1:2,]
+obs<-obs[1:2]
 
 combined_cdf <- combine(dists1, wts, "cdf")
 combined_pdf <- combine(dists1, wts, "pdf")
 combined_draw <- combine(dists1, wts, "draw")
 
-score(combined_cdf, obs[1], "crps", "cdf")
-score(combined_draw, obs[1], "crps", "draw")
-score(combined_pdf, obs[1], "logscore", "pdf")
-score(combined_draw, obs[1], "logscore", "draw")
+score(combined_cdf, obs[1], "crps")
+score(combined_draw, obs[1], "crps")
+score(combined_pdf, obs[1], "logscore")
+score(combined_draw, obs[1], "logscore")
 
-combined_series_cdf <- combine_series(dists, wts, "cdf")
-combined_series_pdf <- combine_series(dists, wts, "pdf")
-combined_series_draw <- combine_series(dists, wts, "draw")
+combined_series_cdf <- combine(dists, wts, "cdf")
+combined_series_pdf <- combine(dists, wts, "pdf")
+combined_series_draw <- combine(dists, wts, "draw")
 
-score_series(combined_series_cdf, obs, "crps", "cdf")
-score_series(combined_series_draw, obs, "crps", "draw")
-score_series(combined_series_pdf, obs, "logscore", "pdf")
-score_series(combined_series_draw, obs, "logscore", "draw")
-
-
-
-twts <- alr(c(1/3, 1/3, 1/3))
-fit <- optim(twts, ofn, dists = dists, obs = obs, 
-             control = list(fnscale = -1))
-ialr(fit$par)
+score(combined_series_cdf, obs, "crps")
+score(combined_series_draw, obs, "crps")
+score(combined_series_pdf, obs, "logscore")
+score(combined_series_draw, obs, "logscore")
 
 
+
+pars <- c(alr(c(1/3, 1/3, 1/3)), logp1(c(2, 2)))
+names(pars) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
+fit <- optim(pars, ofn, dists = dists, obs = obs, rule = "crps", 
+             linkname = "beta", control = list(fnscale = -1))
+ialr(fit$par[1:2])
+ilogp1(fit$par[3:4])
+fit$val
 
 ############### functions
 
+ofn <- function(pars, dists, obs, rule, linkname){
+  wts <- ialr(pars[grepl("wt", names(pars))])
+  type <- switch(rule, "crps" = "cdf", "logscore" = "pdf")
+  combined <- combine(dists, wts, type)
+  linked <- link(combined, linkname, pars, raw = dists)
+  score(linked, obs, rule)
+}
+
+
+link <- function(dists, linkname = "identity", pars = NULL, raw = NULL){
+  if(linkname == "identity"){
+    ldists <- dists
+  } else if(linkname == "beta"){
+    nsteps <- length(dists)
+    ldists <- dists
+    if (class(dists[[1]])[1] == "cdf"){
+      for(i in 1:nsteps){
+        ldists[[i]]$y <- pbeta(dists[[i]]$y, 
+                               ilogp1(pars["beta1"]), 
+                               ilogp1(pars["beta2"]))
+      }
+    }
+    if (class(dists[[1]])[1] == "pdf"){
+      wts <- ialr(pars[grepl("wt", names(pars))])
+      combined_cdfs <- combine(raw, wts, "cdf")
+      for(i in 1:nsteps){
+        ldists[[i]]$y <- dists[[i]]$y * 
+                         dbeta(combined_cdfs[[i]]$y, 
+                               ilogp1(pars["beta1"]), 
+                               ilogp1(pars["beta2"]))
+      }
+    }
+
+  }
+  ldists
+}
+
+score <- function(dists, obs, rule, orientation = "pos"){
+  if(!"list" %in% class(dists)){
+    dists <- list(dists)
+  }
+  nsteps <- length(dists)
+  scores <- rep(NA, nsteps)
+  for(i in 1:nsteps){
+    if(!is.na(obs[i])){
+      scores[i] <- score_dist(dists[[i]], obs[i], rule, orientation)
+    }
+  }
+  sum(scores, na.rm = TRUE)
+}
+
+score_dist <- function(dist, obs, rule, orientation = "pos"){
+  type <- class(dist)[1]
+  if(!is_int_conf(obs) | type == "draw" && !is_int_conf(dist)){
+    stop("not yet coded for continuous distributions, sorry!")
+  }
+  if(rule == "crps"){
+    if(type == "cdf"){
+      val <- crps_cdf(dist, obs, orientation)
+    } else if (type == "draw"){
+      val <- crps_draw(dist, obs, orientation)
+    }
+  } 
+  if(rule == "logscore"){
+    if(type == "pdf"){
+      val <- logs_pdf(dist, obs, orientation)
+    } else if (type == "draw"){
+      val <- logs_draw(dist, obs, orientation)
+    }
+  }
+  val
+}
+
+    
+logs_draw <- function(draw, obs, orientation = "pos"){
+  signtoggle <- switch(orientation, "pos" = 1, "neg" = -1)
+  log(length(which(draw == obs)) / length(draw)) * signtoggle  
+}
+
+logs_pdf <- function(pdf, obs, orientation = "pos"){
+  signtoggle <- switch(orientation, "pos" = 1, "neg" = -1)
+  log(pdf$y[pdf$x == obs]) * signtoggle
+}
+
+
+crps_cdf <- function(cdf, obs, orientation = "pos"){
+  signtoggle <- switch(orientation, "pos" = -1, "neg" = 1)
+  k <- seq(min(cdf$x), max(cdf$x), 1)
+  nk <- length(k)
+  klocations <- match(k, cdf$x)
+  cp <- cdf$y[klocations]
+  cf <- rep(1, nk)
+  cf[which(obs > k)] <- 0
+  rpsv <- (cp - cf)^2
+  sum(rpsv) * signtoggle
+}
+
+
+crps_draw <- function(draw, obs, orientation = "pos"){
+  signtoggle <- switch(orientation, "pos" = -1, "neg" = 1)
+  crps_sample(obs, as.vector(draw)) * signtoggle
+}
 
 
 
-combine_series <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
+
+
+combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
                            seed = NULL){
+  ndims <- length(dim(dists))
+  if(ndims == 2){
+    dists <- array(dists, dim = c(dim(dists)[1], 1, dim(dists)[2]))
+  }
   nsteps <- dim(dists)[2]
   out <- vector("list", length = nsteps)
   nmodels <- dim(dists)[3]
@@ -58,17 +160,21 @@ combine_series <- function(dists, wts = NULL, method = "cdf", nsamps = NULL,
     wts <- matrix(wts, nrow = nsteps, ncol = nmodels, byrow = TRUE)
   }
   for(i in 1:nsteps){
-    out[[i]] <- combine(dists[,i,], wts[i,], method, nsamps, seed)
+    out[[i]] <- combine_dists(dists[,i,], wts[i,], method, nsamps, seed)
   }
-  out
+  if(ndims == 2){
+    out[[1]]
+  } else{
+    out
+  }
 }
 
 
 
 
 
-combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
-                    seed = NULL, digits = 4){
+combine_dists <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
+                          seed = NULL, digits = 4){
   wts <- enforce_wts(wts, nmods = ncol(dists))
   if(method == "cdf"){
     out <- combine_to_cdf(dists, wts, digits)
@@ -85,18 +191,22 @@ combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL,
 
 combine_to_cdf <- function(dists, wts, digits = 4){
   if(is_int_conf(dists)){
-    combine_int_cdfs(dists, wts, digits)
+    cdf <- combine_int_cdfs(dists, wts, digits)
   } else{
     stop("not yet coded for continuous distributions, sorry!")
   }
+  class(cdf) <- c("cdf", class(cdf))
+  cdf
 }
 
 combine_to_pdf <- function(dists, wts, digits = 4){
   if(is_int_conf(dists)){
-    combine_int_pmfs(dists, wts, digits)
+    pdf <- combine_int_pmfs(dists, wts, digits)
   } else{
     stop("not yet coded for continuous distributions, sorry!")
   }
+  class(pdf) <- c("pdf", class(pdf))
+  pdf
 }
 
 combine_to_draw <- function(dists, wts, nsamps = NULL, seed = NULL){
@@ -111,6 +221,7 @@ combine_to_draw <- function(dists, wts, nsamps = NULL, seed = NULL){
   for(i in 1:nsamps){
     draw[i] <- dists[samp_choice[i], dist_choice[i]]
   }
+  class(draw) <- c("draw", class(draw))
   draw
 }
 
@@ -153,15 +264,6 @@ combine_int_pmfs <- function(dists, wts, digits = 4){
   data.frame(x = x[incl], y = y[incl])
 }
 
-
-
-
-ofn <- function(twts, dists, obs){
-  wts <- ialr(twts)
-  combined_cdf <- combine_series(dists, wts, "cdf")
-  score_series(combined_cdf, obs, "crps", "cdf")
-}
-
 alr <- function(wts){
   nwts <- length(wts)
   log(wts[1:(nwts - 1)]/wts[nwts])
@@ -172,72 +274,16 @@ ialr <- function(twts){
   c(allbut, 1 - sum(allbut))
 }
 
+logp1 <- function(x){
+  log(x - 1.0001)
+}
 
-score_series <- function(dists, obs, rule, type = "draw", 
-                         orientation = "pos"){
-  nsteps <- length(dists)
-  scores <- rep(NA, nsteps)
-  for(i in 1:nsteps){
-    if(!is.na(obs[i])){
-      scores[i] <- score(dists[[i]], obs[i], rule, type, orientation)
-    }
-  }
-  sum(scores, na.rm = TRUE)
+ilogp1 <- function(x){
+  exp(x) + 1.0001
 }
 
 
 
-
-score <- function(dist, obs, rule, type = "draw", orientation = "pos"){
-  if(!is_int_conf(obs) | is.vector(dist) && !is_int_conf(dist)){
-    stop("not yet coded for continuous distributions, sorry!")
-  }
-  if(rule == "crps"){
-    if(type == "cdf"){
-      val <- crps_cdf(dist, obs, orientation)
-    } else if (type == "draw"){
-      val <- crps_draw(dist, obs, orientation)
-    }
-  } 
-  if(rule == "logscore"){
-    if(type == "pdf"){
-      val <- logs_pdf(dist, obs, orientation)
-    } else if (type == "draw"){
-      val <- logs_draw(dist, obs, orientation)
-    }
-  }
-  val
-}
-
-    
-logs_draw <- function(dist, obs, orientation = "pos"){
-  signtoggle <- switch(orientation, "pos" = 1, "neg" = -1)
-  log(length(which(dist == obs)) / length(dist)) * signtoggle  
-}
-
-logs_pdf <- function(pdf, obs, orientation = "pos"){
-  signtoggle <- switch(orientation, "pos" = 1, "neg" = -1)
-  log(pdf$y[pdf$x == obs]) * signtoggle
-}
-
-
-crps_cdf <- function(cdf, obs, orientation = "pos"){
-  signtoggle <- switch(orientation, "pos" = -1, "neg" = 1)
-  k <- seq(min(cdf$x), max(cdf$x), 1)
-  nk <- length(k)
-  klocations <- match(k, cdf$x)
-  cp <- cdf$y[klocations]
-  cf <- rep(1, nk)
-  cf[which(obs > k)] <- 0
-  rpsv <- (cp - cf)^2
-  sum(rpsv) * signtoggle
-}
-
-
-crps_draw <- function(draw, obs, orientation = "pos"){
-  signtoggle <- switch(orientation, "pos" = -1, "neg" = 1)
-  crps_sample(obs, draw) * signtoggle
-}
 
 
 
