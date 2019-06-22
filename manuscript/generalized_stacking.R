@@ -1,4 +1,5 @@
 # working space
+# make sure to source the functions below
 
   mods <- list(mod1, mod2, mod3)
   test_origins <- 300:499
@@ -6,10 +7,13 @@
 
   pars1 <- c(alr(c(1/3, 1/3, 1/3)))
   names(pars1) <- c(paste0("twt", 1:2))
-  pars2 <- c(alr(c(1/3, 1/3, 1/3)), logp1(c(2, 2)))
-  names(pars2) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
+  pars2 <- c(alr(c(1/3, 1/3, 1/3)), logp1(2))
+  names(pars2) <- c(paste0("twt", 1:2), "beta")
+  pars3 <- c(alr(c(1/3, 1/3, 1/3)), logp1(c(2, 2)))
+  names(pars3) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
 
-  stack_tab <- matrix(NA, nrow = ntos * 4, ncol = 9)
+
+  stack_tab <- matrix(NA, nrow = ntos * 6, ncol = 9)
   rid <- 1
   for(i in 1:ntos){
 
@@ -27,35 +31,50 @@ print("1")
 print("2")
     fit2 <- tryCatch(
                optim(pars2, ofn, dists = dists, obs = obs, rule = "crps", 
-                     linkname = "beta", control = list(fnscale = -1)),
+                     linkname = "beta1", control = list(fnscale = -1)),
               error = function(x){list()})
 print("3")
     fit3 <- tryCatch(
+               optim(pars3, ofn, dists = dists, obs = obs, rule = "crps", 
+                     linkname = "beta2", control = list(fnscale = -1)),
+              error = function(x){list()})
+
+print("4")
+    fit4 <- tryCatch(
               optim(pars1, ofn, dists = dists, obs = obs, rule = "logscore", 
                     linkname = "identity", control = list(fnscale = -1)),
               error = function(x){list()})
-print("4")
-    fit4 <- tryCatch(
+print("5")
+    fit5 <- tryCatch(
                optim(pars2, ofn, dists = dists, obs = obs, rule = "logscore", 
-                     linkname = "beta", control = list(fnscale = -1)),
+                     linkname = "beta1", control = list(fnscale = -1)),
+              error = function(x){list()})
+print("6")
+    fit6 <- tryCatch(
+               optim(pars3, ofn, dists = dists, obs = obs, rule = "logscore", 
+                     linkname = "beta2", control = list(fnscale = -1)),
               error = function(x){list()})
 
     stack_tab[rid + 0, ] <- c(test_origin, "crps", "id", 
                               ialr(fit1$par), NA, NA, 
                               fit1$val)
-    stack_tab[rid + 1, ] <- c(test_origin, "crps", "beta", 
-                              ialr(fit2$par[1:2]), ilogp1(fit2$par[3:4]), 
+    stack_tab[rid + 1, ] <- c(test_origin, "crps", "beta1", 
+                              ialr(fit2$par[1:2]), ilogp1(fit2$par[3]), NA,  
                               fit2$val)
-    stack_tab[rid + 2, ] <- c(test_origin, "logscore", "id", 
-                              ialr(fit3$par), NA, NA, 
+    stack_tab[rid + 2, ] <- c(test_origin, "crps", "beta2", 
+                              ialr(fit3$par[1:2]), ilogp1(fit3$par[3:4]), 
                               fit3$val)
-    stack_tab[rid + 3, ] <- c(test_origin, "logscore", "beta", 
-                              ialr(fit4$par[1:2]), ilogp1(fit4$par[3:4]), 
+    stack_tab[rid + 3, ] <- c(test_origin, "logscore", "id", 
+                              ialr(fit4$par), NA, NA, 
                               fit4$val)
-    rid <- rid + 4
+    stack_tab[rid + 4, ] <- c(test_origin, "logscore", "beta1", 
+                              ialr(fit5$par[1:2]), ilogp1(fit5$par[3]), NA,  
+                              fit5$val)
+    stack_tab[rid + 5, ] <- c(test_origin, "logscore", "beta2", 
+                              ialr(fit6$par[1:2]), ilogp1(fit6$par[3:4]), 
+                              fit6$val)
+    rid <- rid + 6
   }
-
-
 
 stack_df <- data.frame(stack_tab, stringsAsFactors = FALSE)
 colnames(stack_df)<-c("origin", "rule", "link", paste0("wt", 1:3), 
@@ -65,19 +84,9 @@ for(i in c(1,4:9)){
   stack_df[,i] <- as.numeric(stack_df[,i])
 }
 
-incl <- which(stack_df$rule == "logscore" & stack_df$link == "id")
-plot(stack_df$origin[incl], stack_df$wt1[incl], type = "l")
-points(stack_df$origin[incl], stack_df$wt2[incl], type = "l", col = 2)
-points(stack_df$origin[incl], stack_df$wt3[incl], type = "l", col = 3)
-
-
-incl <- which(stack_df$rule == "crps" & stack_df$link == "id")
-v1<-stack_df$val[incl]
-incl <- which(stack_df$rule == "crps" & stack_df$link == "beta")
-v2<-stack_df$val[incl]
-
 
 save(stack_df, file = "model_output/stack_df.RData")
+
 
 ############### functions
 
@@ -93,7 +102,27 @@ ofn <- function(pars, dists, obs, rule, linkname){
 link <- function(dists, linkname = "identity", pars = NULL, raw = NULL){
   if(linkname == "identity"){
     ldists <- dists
-  } else if(linkname == "beta"){
+  } else if(linkname == "beta1"){
+    nsteps <- length(dists)
+    ldists <- dists
+    if (class(dists[[1]])[1] == "cdf"){
+      for(i in 1:nsteps){
+        ldists[[i]]$y <- pbeta(dists[[i]]$y, 
+                               ilogp1(pars["beta"]), 
+                               ilogp1(pars["beta"]))
+      }
+    }
+    if (class(dists[[1]])[1] == "pdf"){
+      wts <- ialr(pars[grepl("wt", names(pars))])
+      combined_cdfs <- combine(raw, wts, "cdf")
+      for(i in 1:nsteps){
+        ldists[[i]]$y <- dists[[i]]$y * 
+                         dbeta(combined_cdfs[[i]]$y, 
+                               ilogp1(pars["beta"]), 
+                               ilogp1(pars["beta"]))
+      }
+    }
+  } else if(linkname == "beta2"){
     nsteps <- length(dists)
     ldists <- dists
     if (class(dists[[1]])[1] == "cdf"){
@@ -113,7 +142,6 @@ link <- function(dists, linkname = "identity", pars = NULL, raw = NULL){
                                ilogp1(pars["beta2"]))
       }
     }
-
   }
   ldists
 }
@@ -162,7 +190,8 @@ logs_draw <- function(draw, obs, orientation = "pos"){
 
 logs_pdf <- function(pdf, obs, orientation = "pos"){
   signtoggle <- switch(orientation, "pos" = 1, "neg" = -1)
-  log(pdf$y[pdf$x == obs]) * signtoggle
+  yy <- sum(pdf$y)
+  log(pdf$y[pdf$x == obs] / yy) * signtoggle
 }
 
 

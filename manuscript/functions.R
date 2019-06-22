@@ -60,10 +60,21 @@ fig4 <- function(abunds, moon_dates){
   tiff("fig4.tiff", width = 6, height = 3, units = "in", res = 200)
 
   par(fig = c(0, 1, 0, 1), mar = c(1.25, 2.125, 1, 1))
-  daterange <- as.Date(c("1993-08-01", "2019-04-01"))
-  blank(bty = "L", xlim = daterange, ylim = c(-0.3, 18))
-  x <- as.Date(moon_dates[200:length(abunds)])
-  y <- abunds[200:length(abunds)]
+  daterange <- as.Date(c("1993-08-01", "2019-01-01"))
+  blank(bty = "L", xlim = daterange, ylim = c(-0.5, 18))
+
+  rectx1 <- as.Date(moon_dates[300]) - 14
+  rectx2 <- as.Date(moon_dates[500]) + 14
+  rectcol1 <- rgb(0.7, 0.7, 0.7, 0.4)
+  rect(rectx1, -0.3, rectx2, 18, col = rectcol1, border = NA)
+  rectx1 <- as.Date(moon_dates[501]) - 14
+  rectx2 <- as.Date(moon_dates[512]) + 14
+  rectcol1 <- rgb(0.2, 0.2, 0.2, 0.4)
+  rect(rectx1, -0.3, rectx2, 18, col = rectcol1, border = NA)
+
+
+  x <- as.Date(moon_dates[200:512])
+  y <- abunds[200:512]
   set.seed(123)
   yy <- y + runif(length(y), -0.25, 0.25)
   nas <- which(is.na(y))
@@ -75,17 +86,17 @@ fig4 <- function(abunds, moon_dates){
   axis(2, at = seq(0, 18, 1), labels = FALSE, tck = -0.01)
   mtext(side = 2, line = 1.1, cex = 0.8, 
         expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
-  datevals <- as.Date(paste0(1993:2020, "-01-01"))
+  datevals <- as.Date(paste0(1993:2019, "-01-01"))
   axis(1, at = datevals, labels = FALSE, tck = -0.01)
-  datevals <- as.Date(paste0(seq(1995, 2020, 5), "-01-01"))
-  datelabs <- seq(1995, 2020, 5)
+  datevals <- as.Date(paste0(seq(1995, 2019, 5), "-01-01"))
+  datelabs <- seq(1995, 2019, 5)
   axis(1, at = datevals, labels = datelabs, lwd = 0, line = -0.9, 
        cex.axis = 0.7)
   axis(1, at = datevals, labels = FALSE, tck = -0.02)
   
   par(fig = c(0.1, 0.35, 0.5, 1), mar = c(1.25, 1.5, 1, 0.5), new = TRUE)
   blank(bty = "L", xlim = c(-0.5, 17.5), ylim = c(0, 0.4))
-  tt <- table(abunds[200:length(abunds)])
+  tt <- table(abunds[200:512])
   points(tt/sum(tt))
 
   axis(1, at = seq(0, 15, 5), labels = FALSE, tck = -0.025)
