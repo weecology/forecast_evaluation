@@ -12,21 +12,25 @@ abunds <- plot_sp_abunds(plot = 19, species = "PP")
 moon_dates <- load_trapping_data(clean = FALSE)$newmoons_table$newmoondate
 
 summarize_abunds(abunds[200:length(abunds)])
+fig4(abunds, moon_dates)
 
-in_ts <- training_ts(starts = 200, ends = 300:500)
-
-# only run if models have not yet been fit
+# only run if base models have not yet been fit
+# in_ts <- training_ts(starts = 200, ends = 300:500)
 # mod1 <- mods(1, abunds, moon_dates, in_ts)
 # mod2 <- mods(2, abunds, moon_dates, in_ts)
 # mod3 <- mods(3, abunds, moon_dates, in_ts)
 
+# only run if stacking models have not yet been fit
+# stack_df <- stack_mods(mods, 300:499, abunds, save = FALSE) 
+
 load_models(1:3)
 eval_tab <- make_eval_tab(mod1, mod2, mod3)
 
-
-fig4(abunds, moon_dates)
+load_stack_df()
 
 # working space
+
+
 
 # building out Fig 5 and the ensembles
 
@@ -72,7 +76,7 @@ for(i in 290:301){
 }
 
 
-rs <- which(eval_tab$model == 1 & eval_tab$destin < 500)
+rs <- which(eval_tab$model == 1 & eval_tab$origin == 500)
 cs <- grep("PIT", colnames(eval_tab))
 PIT_m1 <- apply(eval_tab[rs, cs], 2, mean, na.rm = TRUE)
 
@@ -94,7 +98,7 @@ for(i in 290:301){
 }
 
 
-rs <- which(eval_tab$model == 2 & eval_tab$destin < 500)
+rs <- which(eval_tab$model == 2 & eval_tab$origin == 500)
 cs <- grep("PIT", colnames(eval_tab))
 PIT_m2 <- apply(eval_tab[rs, cs], 2, mean, na.rm = TRUE)
 
@@ -116,7 +120,7 @@ for(i in 290:301){
 }
 
 
-rs <- which(eval_tab$model == 3 & eval_tab$destin < 500)
+rs <- which(eval_tab$model == 3 & eval_tab$origin == 500)
 cs <- grep("PIT", colnames(eval_tab))
 PIT_m3 <- apply(eval_tab[rs, cs], 2, mean, na.rm = TRUE)
 
@@ -127,7 +131,7 @@ fig4_row(abunds, yy3, yyy3, PIT_m3, 3, title = "cAR(1)")
 yy4 <- rbind(yy1, yy2, yy3)
 yyy4 <- rbind(yyy1, yyy2, yyy3)
 
-rs <- which(eval_tab$destin < 500)
+rs <- which(eval_tab$origin == 500)
 cs <- grep("PIT", colnames(eval_tab))
 PIT_m4 <- apply(eval_tab[rs, cs], 2, mean, na.rm = TRUE)
 
