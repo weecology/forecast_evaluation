@@ -15,8 +15,8 @@ model {
    for(i in 2:N) {
       predX[i] <- phi*X[i-1] + beta1*cosyr[i] + beta2*sinyr[i]; 
       checkX[i] ~ dnorm(predX[i], tau); # Process variation
-      X[i] <- min(c(checkX[i], 18)); # Enforce ceiling to avoid overflow
+      X[i] <- min(c(checkX[i], 3.9)); # Enforce ceiling to avoid overflow
       predY[i] <- exp(X[i]);
-      Y[i] ~ dpois(exp(X[i])); # Observation variation
+      Y[i] ~ dpois(exp(X[i])) T(0,49); # Observation variation
    }
 }  

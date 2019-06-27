@@ -1,94 +1,131 @@
 
-load_stack_df <- function(){
-  load("model_output/stack_df.RData", envir = parent.frame(n = 2))
+make_abunds_mat <- function(abunds, origins, lead_time = 12){
+  ntests <- length(origins)
+  abunds_mat <- matrix(NA, nrow = ntests, ncol = lead_time)
+  for(i in 1:ntests){
+    abunds_mat[i,] <- abunds[origins[i]+(1:12)]
+  }
+  abunds_mat
 }
 
-stack_mods <- function(mods, test_origins, abunds, save = TRUE){
-  ntos <- length(test_origins)
-  pars1 <- c(alr(c(1/3, 1/3, 1/3)))
-  names(pars1) <- c(paste0("twt", 1:2))
-  pars2 <- c(alr(c(1/3, 1/3, 1/3)), logp1(2))
-  names(pars2) <- c(paste0("twt", 1:2), "beta")
-  pars3 <- c(alr(c(1/3, 1/3, 1/3)), logp1(c(2, 2)))
-  names(pars3) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
 
+make_ens_eval_tab <- function(abunds, origins, lead_time, ensdrawl,
+                              n_bins = 10){
 
-  stack_tab <- matrix(NA, nrow = ntos * 6, ncol = 9)
-  rid <- 1
-  for(i in 1:ntos){
+  abunds_mat <- make_abunds_mat(abunds, origins, lead_time)
 
-    test_origin <- test_origins[i]
-    print("#######################")
-    print(paste0("test origin ", test_origin))
-    dists <- draw_predictive_dists(mods, test_origin, last_in = 500)
-    obs <- abunds[test_origin + 1:12]
+  ntests <- dim(ensdraw_wn)[3]
+  nsteps <- dim(ensdraw_wn)[2]
+  nsamps <- dim(ensdraw_wn)[1]
+  nens <- length(ensdrawl)
+  eeval_tab <- matrix(NA, nrow = nens * ntests * nsteps, ncol = 16)
+  rinc <- 0
+  for(i in 1:ntests){
 
-    print("1")
-    fit1 <- tryCatch(
-              optim(pars1, ofn, dists = dists, obs = obs, rule = "crps", 
-                    linkname = "identity", control = list(fnscale = -1)),
-              error = function(x){list()})
-    print("2")
-    fit2 <- tryCatch(
-               optim(pars2, ofn, dists = dists, obs = obs, rule = "crps", 
-                     linkname = "beta1", control = list(fnscale = -1)),
-              error = function(x){list()})
-    print("3")
-    fit3 <- tryCatch(
-               optim(pars3, ofn, dists = dists, obs = obs, rule = "crps", 
-                     linkname = "beta2", control = list(fnscale = -1)),
-              error = function(x){list()})
+    abundsi <- abunds_mat[i,]
+    origini <- origins[i]
+    destini <- origini + 1:lead_time
+    leadi <- 1:lead_time 
 
-    print("4")
-    fit4 <- tryCatch(
-              optim(pars1, ofn, dists = dists, obs = obs, rule = "logscore", 
-                    linkname = "identity", control = list(fnscale = -1)),
-              error = function(x){list()})
-    print("5")
-    fit5 <- tryCatch(
-               optim(pars2, ofn, dists = dists, obs = obs, rule = "logscore", 
-                     linkname = "beta1", control = list(fnscale = -1)),
-              error = function(x){list()})
-    print("6")
-    fit6 <- tryCatch(
-               optim(pars3, ofn, dists = dists, obs = obs, rule = "logscore", 
-                     linkname = "beta2", control = list(fnscale = -1)),
-              error = function(x){list()})
+    for(j in 1:nens){
 
-    stack_tab[rid + 0, ] <- c(test_origin, "crps", "id", 
-                              ialr(fit1$par), NA, NA, 
-                              fit1$val)
-    stack_tab[rid + 1, ] <- c(test_origin, "crps", "beta1", 
-                              ialr(fit2$par[1:2]), ilogp1(fit2$par[3]), NA,  
-                              fit2$val)
-    stack_tab[rid + 2, ] <- c(test_origin, "crps", "beta2", 
-                              ialr(fit3$par[1:2]), ilogp1(fit3$par[3:4]), 
-                              fit3$val)
-    stack_tab[rid + 3, ] <- c(test_origin, "logscore", "id", 
-                              ialr(fit4$par), NA, NA, 
-                              fit4$val)
-    stack_tab[rid + 4, ] <- c(test_origin, "logscore", "beta1", 
-                              ialr(fit5$par[1:2]), ilogp1(fit5$par[3]), NA,  
-                              fit5$val)
-    stack_tab[rid + 5, ] <- c(test_origin, "logscore", "beta2", 
-                              ialr(fit6$par[1:2]), ilogp1(fit6$par[3:4]), 
-                              fit6$val)
-    rid <- rid + 6
+      PITj <- matrix(NA, nrow = lead_time, ncol = n_bins)
+      s_rj <- rep(NA, lead_time)
+      s_lj <- rep(NA, lead_time)
+
+      model_name <- names(ensdrawl)[j]
+      for(k in 1:lead_time){
+        yyy <- abundsi[k]
+        if(!is.na(yyy)){
+          drawjki <- ensdrawl[[j]][,k,i]
+          s_rj[k] <- -crps_sample(y = yyy, dat = drawjki)
+          s_lj[k] <- log(length(drawjki[drawjki==yyy])/length(drawjki))
+          PITj[k, ] <- nrPIT(yyy, ecdf(drawjki), n_bins)
+        }
+      }
+      rinc0 <- max(rinc)
+      rinc <- rinc0 + 1:lead_time
+      eeval_tab[rinc,1] <- rep(model_name, lead_time)
+      eeval_tab[rinc,2] <- rep(origini, lead_time)
+      eeval_tab[rinc,3] <- destini
+      eeval_tab[rinc,4] <- 1:lead_time
+      eeval_tab[rinc,5] <- s_rj
+      eeval_tab[rinc,6] <- s_lj
+      eeval_tab[rinc,7:16] <- PITj
+    }
   }
-
-  stack_df <- data.frame(stack_tab, stringsAsFactors = FALSE)
-  colnames(stack_df)<-c("origin", "rule", "link", paste0("wt", 1:3), 
-                        "b1", "b2", "val")
-
-  for(i in c(1,4:9)){
-    stack_df[,i] <- as.numeric(stack_df[,i])
-  }
-
-  if(save){
-    save(stack_df, file = "model_output/stack_df.RData")
-  }
-  stack_df
+  colnames(eeval_tab) <- c("model", "origin", "destin", "lead", "crps", 
+                           "logs", paste0("PITint", 1:n_bins))
+  eeval_tab <- data.frame(eeval_tab)
+  eeval_tab
 }
+
+
+draw_from_cdftl <- function(n, cdftl){
+  pdftl <- pdftl_from_cdftl(cdftl)
+  draw_from_pdftl(n, pdftl)
+}
+
+pdftl_from_cdftl <- function(cdftl){
+  pdftl <- vector("list", length = length(cdftl))
+  for(i in 1:length(cdftl)){
+    pdftl[[i]] <- cdftl[[i]]
+    if(!all(is.na(pdftl[[i]]))){
+      pdftl[[i]]$y <- diff(c(0, cdftl[[i]]$y))
+    }
+  }
+  pdftl
+}
+
+draw_from_pdftl <- function(n, pdftl){
+  out <- matrix(NA, n, length(pdftl))
+  for(i in 1:length(pdftl)){
+    if(!all(is.na(pdftl[[i]]))){
+      out[,i] <- sample(pdftl[[i]]$x, n, replace = TRUE, prob = pdftl[[i]]$y)
+    }
+  }
+  out
+}
+
+stack_mods <- function(mods, abunds, rule = "crps", linkname = "identity", 
+                       test_origins = 300:499, last_in = 500, nsamps = 1000,
+                       lead_time = 12, list_spot_offset = 299, seed = NULL){
+
+  set.seed(seed)
+  nsteps <- lead_time
+  ntests <- length(test_origins)
+  nmods <- length(mods)
+  obs <- matrix(NA, nrow = ntests, ncol = nsteps)
+  for(i in 1:ntests){
+    spots <- test_origins[i] + 1:lead_time
+    spotsNA <- which(spots > last_in)
+    obs[i, ] <- abunds[spots]
+    obs[i, spotsNA] <- NA
+  }
+
+  dists <- array(NA, dim = c(nsamps, nsteps, nmods, ntests))
+  for(i in 1:ntests){
+    origin <- i + list_spot_offset
+    inp <- draw_predictive_dists(mods, origin = origin, last_in = last_in, 
+                                 n = nsamps)
+    dists[,1:dim(inp)[2],,i] <- inp
+  }
+
+  if(linkname == "identity"){ 
+    pars <- c(alr(c(1/3, 1/3, 1/3)))
+    names(pars) <- c(paste0("twt", 1:2))
+  } else if(linkname == "beta1"){
+    pars <- c(alr(c(1/3, 1/3, 1/3)), logp(2))
+    names(pars) <- c(paste0("twt", 1:2), "beta")
+  } else if(linkname == "beta2"){
+    pars <- c(alr(c(1/3, 1/3, 1/3)), logp(c(2, 2)))
+    names(pars) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
+  }  
+
+  optim(pars, ofn, dists = dists, obs = obs, rule = rule, 
+        linkname = linkname, control = list(fnscale = -1), hessian = TRUE)
+}
+
 
 ofn <- function(pars, dists, obs, rule, linkname){
   wts <- ialr(pars[grepl("wt", names(pars))])
@@ -99,66 +136,310 @@ ofn <- function(pars, dists, obs, rule, linkname){
 }
 
 
+
+score <- function(dists, obs, rule, orientation = "pos"){
+  ntests <- length(dists)
+  nsteps <- length(dists[[1]])
+  scores <- matrix(NA, nrow = ntests, ncol = nsteps)
+  for(i in 1:ntests){
+    for(j in 1:nsteps){
+      if(!is.na(obs[i,j])){
+        scores[i,j] <- score_dist(dists[[i]][[j]], obs[i,j], rule, 
+                                  orientation)
+      }
+    }
+  }
+  sum(scores, na.rm = TRUE)
+}
+
+
+combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
+                           seed = NULL){
+  if(length(dim(dists)) == 3){
+    dists <- array(dists, dim = c(dim(dists), 1))
+  }
+  ntests <- dim(dists)[4]
+  nsteps <- dim(dists)[2]
+  nmodels <- dim(dists)[3]
+  out <- vector("list", length = ntests)
+  if(is.null(wts)){
+    wts <- rep(1/nmodels, nmodels)
+  }
+  if(is.null(dim(wts))){
+    wts <- matrix(wts, nrow = nsteps, ncol = nmodels, byrow = TRUE)
+  }
+  for(i in 1:ntests){
+    out1 <- vector("list", length = nsteps)
+    for(j in 1:nsteps){
+      out1[[j]] <- combine_dists(dists[,j,,i], wts[j,], method, nsamps, seed)
+    }
+    out[[i]] <- out1
+  }
+  out
+}
+
+
+
+
 link <- function(dists, linkname = "identity", pars = NULL, raw = NULL){
   if(linkname == "identity"){
     ldists <- dists
   } else if(linkname == "beta1"){
-    nsteps <- length(dists)
+    ntests <- length(dists)
+    nsteps <- length(dists[[1]])
     ldists <- dists
-    if (class(dists[[1]])[1] == "cdf"){
-      for(i in 1:nsteps){
-        ldists[[i]]$y <- pbeta(dists[[i]]$y, 
-                               ilogp1(pars["beta"]), 
-                               ilogp1(pars["beta"]))
+    if (class(dists[[1]][[1]])[1] == "cdf"){
+      for(i in 1:ntests){
+        for(j in 1:nsteps){
+          if(!all(is.na(dists[[i]][[j]]))){
+            ldists[[i]][[j]]$y <- pbeta(dists[[i]][[j]]$y, 
+                                   ilogp(pars["beta"]), 
+                                   ilogp(pars["beta"]))
+          } 
+        }
       }
     }
-    if (class(dists[[1]])[1] == "pdf"){
+    if (class(dists[[1]][[1]])[1] == "pdf"){
       wts <- ialr(pars[grepl("wt", names(pars))])
       combined_cdfs <- combine(raw, wts, "cdf")
-      for(i in 1:nsteps){
-        ldists[[i]]$y <- dists[[i]]$y * 
-                         dbeta(combined_cdfs[[i]]$y, 
-                               ilogp1(pars["beta"]), 
-                               ilogp1(pars["beta"]))
+      for(i in 1:ntests){
+        for(j in 1:nsteps){
+          if(!all(is.na(dists[[i]][[j]]))){
+            ldists[[i]][[j]]$y <- dists[[i]][[j]]$y * 
+                                  dbeta(combined_cdfs[[i]][[j]]$y, 
+                                        ilogp(pars["beta"]), 
+                                        ilogp(pars["beta"]))
+          }
+        }
       }
     }
   } else if(linkname == "beta2"){
-    nsteps <- length(dists)
+    ntests <- length(dists)
+    nsteps <- length(dists[[1]])
     ldists <- dists
-    if (class(dists[[1]])[1] == "cdf"){
-      for(i in 1:nsteps){
-        ldists[[i]]$y <- pbeta(dists[[i]]$y, 
-                               ilogp1(pars["beta1"]), 
-                               ilogp1(pars["beta2"]))
+    if (class(dists[[1]][[1]])[1] == "cdf"){
+      for(i in 1:ntests){
+        for(j in 1:nsteps){
+          if(!all(is.na(dists[[i]][[j]]))){
+            ldists[[i]][[j]]$y <- pbeta(dists[[i]][[j]]$y, 
+                                        ilogp(pars["beta1"]), 
+                                        ilogp(pars["beta2"]))
+          }
+        }
       }
     }
-    if (class(dists[[1]])[1] == "pdf"){
+    if (class(dists[[1]][[1]])[1] == "pdf"){
       wts <- ialr(pars[grepl("wt", names(pars))])
       combined_cdfs <- combine(raw, wts, "cdf")
-      for(i in 1:nsteps){
-        ldists[[i]]$y <- dists[[i]]$y * 
-                         dbeta(combined_cdfs[[i]]$y, 
-                               ilogp1(pars["beta1"]), 
-                               ilogp1(pars["beta2"]))
+      for(i in 1:ntests){
+        for(j in 1:nsteps){
+          if(!all(is.na(dists[[i]][[j]]))){
+            ldists[[i]][[j]]$y <- dists[[i]][[j]]$y * 
+                                  dbeta(combined_cdfs[[i]][[j]]$y, 
+                                        ilogp(pars["beta1"]), 
+                                        ilogp(pars["beta2"]))
+          }
+        }
       }
     }
   }
   ldists
 }
 
-score <- function(dists, obs, rule, orientation = "pos"){
-  if(!"list" %in% class(dists)){
-    dists <- list(dists)
+
+
+############################
+
+listtomat <- function(x){
+  out <- matrix(NA, nrow = length(x[[1]]), ncol = length(x))
+  for(i in 1:length(x)){
+    out[,i] <- x[[i]]
   }
-  nsteps <- length(dists)
-  scores <- rep(NA, nsteps)
-  for(i in 1:nsteps){
-    if(!is.na(obs[i])){
-      scores[i] <- score_dist(dists[[i]], obs[i], rule, orientation)
-    }
-  }
-  sum(scores, na.rm = TRUE)
+  out
 }
+
+test_sample_sizes <- function(abunds, origin = 300:499, lead = 12, 
+                              last = 500){
+  nstarts <- length(origin)
+  tss <- rep(NA, nstarts)
+  for(i in 1:nstarts){
+    ts <- (origin[i] + 1):(origin[i] + lead)
+    ts <- ts[ts <= last & !is.na(abunds[ts])]
+    tss[i] <- length(ts)
+  }
+  tss
+}
+
+multinom_wts <- function(abunds, stack_df, rule, link){
+  tss <- test_sample_sizes(abunds)
+  incl <- which(stack_df$rule == rule & stack_df$link == link)
+  tor <- stack_df$origin[incl]
+  yy <- as.matrix(stack_df[incl, 4:6])
+
+  mmod <- multinom(yy ~ tor, weights = tss)
+  predict(mmod, newdata = list(tor = 500), type = "probs")
+}
+
+load_stack_df <- function(){
+  load("model_output/stack_df.RData", envir = parent.frame(n = 2))
+}
+
+#stack_mods <- function(mods, test_origins, abunds, save = TRUE){
+#  ntos <- length(test_origins)
+#  pars1 <- c(alr(c(1/3, 1/3, 1/3)))
+#  names(pars1) <- c(paste0("twt", 1:2))
+#  pars2 <- c(alr(c(1/3, 1/3, 1/3)), logp(2))
+#  names(pars2) <- c(paste0("twt", 1:2), "beta")
+#  pars3 <- c(alr(c(1/3, 1/3, 1/3)), logp(c(2, 2)))
+#  names(pars3) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
+
+
+#  stack_tab <- matrix(NA, nrow = ntos * 6, ncol = 9)
+#  rid <- 1
+#  for(i in 1:ntos){
+
+#    test_origin <- test_origins[i]
+#    print("#######################")
+#    print(paste0("test origin ", test_origin))
+#    dists <- draw_predictive_dists(mods, test_origin, last_in = 500)
+#    obs <- abunds[test_origin + 1:12]
+
+#    print("1")
+#    fit1 <- tryCatch(
+#              optim(pars1, ofn, dists = dists, obs = obs, rule = "crps", 
+#                    linkname = "identity", control = list(fnscale = -1)),
+#              error = function(x){list()})
+#    print("2")
+#    fit2 <- tryCatch(
+#               optim(pars2, ofn, dists = dists, obs = obs, rule = "crps", 
+#                     linkname = "beta1", control = list(fnscale = -1)),
+#              error = function(x){list()})
+#    print("3")
+#    fit3 <- tryCatch(
+#               optim(pars3, ofn, dists = dists, obs = obs, rule = "crps", 
+#                     linkname = "beta2", control = list(fnscale = -1)),
+#              error = function(x){list()})
+
+#    print("4")
+#    fit4 <- tryCatch(
+#              optim(pars1, ofn, dists = dists, obs = obs, rule = "logscore", 
+#                    linkname = "identity", control = list(fnscale = -1)),
+#              error = function(x){list()})
+#    print("5")
+#    fit5 <- tryCatch(
+#               optim(pars2, ofn, dists = dists, obs = obs, rule = "logscore", 
+#                     linkname = "beta1", control = list(fnscale = -1)),
+#              error = function(x){list()})
+#    print("6")
+#    fit6 <- tryCatch(
+#               optim(pars3, ofn, dists = dists, obs = obs, rule = "logscore", 
+#                     linkname = "beta2", control = list(fnscale = -1)),
+#              error = function(x){list()})
+#
+#    stack_tab[rid + 0, ] <- c(test_origin, "crps", "id", 
+#                              ialr(fit1$par), NA, NA, 
+#                              fit1$val)
+#    stack_tab[rid + 1, ] <- c(test_origin, "crps", "beta1", 
+#                              ialr(fit2$par[1:2]), ilogp(fit2$par[3]), NA,  
+#                              fit2$val)
+#    stack_tab[rid + 2, ] <- c(test_origin, "crps", "beta2", 
+#                              ialr(fit3$par[1:2]), ilogp(fit3$par[3:4]), 
+#                              fit3$val)
+#    stack_tab[rid + 3, ] <- c(test_origin, "logscore", "id", 
+#                              ialr(fit4$par), NA, NA, 
+#                              fit4$val)
+#    stack_tab[rid + 4, ] <- c(test_origin, "logscore", "beta1", 
+#                              ialr(fit5$par[1:2]), ilogp(fit5$par[3]), NA,  
+#                              fit5$val)
+#    stack_tab[rid + 5, ] <- c(test_origin, "logscore", "beta2", 
+#                              ialr(fit6$par[1:2]), ilogp(fit6$par[3:4]), 
+#                              fit6$val)
+#    rid <- rid + 6
+#  }
+
+#  stack_df <- data.frame(stack_tab, stringsAsFactors = FALSE)
+#  colnames(stack_df)<-c("origin", "rule", "link", paste0("wt", 1:3), 
+#                        "b1", "b2", "val")#
+
+#  for(i in c(1,4:9)){
+#    stack_df[,i] <- as.numeric(stack_df[,i])
+#  }
+
+#  if(save){
+#    save(stack_df, file = "model_output/stack_df.RData")
+#  }
+#  stack_df
+#}
+#
+#ofn <- function(pars, dists, obs, rule, linkname){
+#  wts <- ialr(pars[grepl("wt", names(pars))])
+#  type <- switch(rule, "crps" = "cdf", "logscore" = "pdf")
+#  combined <- combine(dists, wts, type)
+#  linked <- link(combined, linkname, pars, raw = dists)
+#  score(linked, obs, rule)
+#}
+
+
+#link <- function(dists, linkname = "identity", pars = NULL, raw = NULL){
+#  if(linkname == "identity"){
+#    ldists <- dists
+#  } else if(linkname == "beta1"){
+#    nsteps <- length(dists)
+#    ldists <- dists
+#    if (class(dists[[1]])[1] == "cdf"){
+#      for(i in 1:nsteps){
+#        ldists[[i]]$y <- pbeta(dists[[i]]$y, 
+#                               ilogp(pars["beta"]), 
+#                               ilogp(pars["beta"]))
+#      }
+#    }
+#    if (class(dists[[1]])[1] == "pdf"){
+#      wts <- ialr(pars[grepl("wt", names(pars))])
+#      combined_cdfs <- combine(raw, wts, "cdf")
+#      for(i in 1:nsteps){
+#        ldists[[i]]$y <- dists[[i]]$y * 
+#                         dbeta(combined_cdfs[[i]]$y, 
+#                               ilogp(pars["beta"]), 
+#                               ilogp(pars["beta"]))
+#      }
+#    }
+#  } else if(linkname == "beta2"){
+#    nsteps <- length(dists)
+#    ldists <- dists
+#    if (class(dists[[1]])[1] == "cdf"){
+#      for(i in 1:nsteps){
+#        ldists[[i]]$y <- pbeta(dists[[i]]$y, 
+#                               ilogp(pars["beta1"]), 
+#                               ilogp(pars["beta2"]))
+#      }
+#    }
+#    if (class(dists[[1]])[1] == "pdf"){
+#      wts <- ialr(pars[grepl("wt", names(pars))])
+#      combined_cdfs <- combine(raw, wts, "cdf")
+#      for(i in 1:nsteps){
+#        ldists[[i]]$y <- dists[[i]]$y * 
+#                         dbeta(combined_cdfs[[i]]$y, 
+#                               ilogp(pars["beta1"]), 
+#                               ilogp(pars["beta2"]))
+#      }
+#    }
+#  }
+#  ldists
+#}
+
+#score <- function(dists, obs, rule, orientation = "pos"){
+#  if(!"list" %in% class(dists)){
+#    dists <- list(dists)
+#  }
+#  nsteps <- length(dists)
+#  scores <- rep(NA, nsteps)
+#  for(i in 1:nsteps){
+#    if(!is.na(obs[i])){
+#      scores[i] <- score_dist(dists[[i]], obs[i], rule, orientation)
+#    }
+#  }
+#  sum(scores, na.rm = TRUE)
+#}
 
 score_dist <- function(dist, obs, rule, orientation = "pos"){
   type <- class(dist)[1]
@@ -217,30 +498,30 @@ crps_draw <- function(draw, obs, orientation = "pos"){
 
 
 
-combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
-                           seed = NULL){
-  ndims <- length(dim(dists))
-  if(ndims == 2){
-    dists <- array(dists, dim = c(dim(dists)[1], 1, dim(dists)[2]))
-  }
-  nsteps <- dim(dists)[2]
-  out <- vector("list", length = nsteps)
-  nmodels <- dim(dists)[3]
-  if(is.null(wts)){
-    wts <- rep(1/nmodels, nmodels)
-  }
-  if(is.null(dim(wts))){
-    wts <- matrix(wts, nrow = nsteps, ncol = nmodels, byrow = TRUE)
-  }
-  for(i in 1:nsteps){
-    out[[i]] <- combine_dists(dists[,i,], wts[i,], method, nsamps, seed)
-  }
-  if(ndims == 2){
-    out[[1]]
-  } else{
-    out
-  }
-}
+#combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
+#                           seed = NULL){
+#  ndims <- length(dim(dists))
+#  if(ndims == 2){
+#    dists <- array(dists, dim = c(dim(dists)[1], 1, dim(dists)[2]))
+#  }
+#  nsteps <- dim(dists)[2]
+#  out <- vector("list", length = nsteps)
+#  nmodels <- dim(dists)[3]
+#  if(is.null(wts)){
+#    wts <- rep(1/nmodels, nmodels)
+#  }
+#  if(is.null(dim(wts))){
+#    wts <- matrix(wts, nrow = nsteps, ncol = nmodels, byrow = TRUE)
+#  }
+#  for(i in 1:nsteps){
+#    out[[i]] <- combine_dists(dists[,i,], wts[i,], method, nsamps, seed)
+#  }
+#  if(ndims == 2){
+#    out[[1]]
+#  } else{
+#    out
+#  }
+#}
 
 
 
@@ -248,14 +529,15 @@ combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL,
 
 combine_dists <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
                           seed = NULL, digits = 4){
+  if (all(is.na(dists))){
+    return(dists[,1])
+  }
   wts <- enforce_wts(wts, nmods = ncol(dists))
   if(method == "cdf"){
     out <- combine_to_cdf(dists, wts, digits)
-  }
-  if(method == "pdf"){
+  } else if(method == "pdf"){
     out <- combine_to_pdf(dists, wts, digits)
-  }
-  if(method == "draw"){
+  } else if(method == "draw"){
     out <- combine_to_draw(dists, wts, nsamps, seed)
   }
   out
@@ -347,12 +629,12 @@ ialr <- function(twts){
   c(allbut, 1 - sum(allbut))
 }
 
-logp1 <- function(x){
-  log(x - 1.0001)
+logp <- function(x, p = 0){
+  log(x - p)
 }
 
-ilogp1 <- function(x){
-  exp(x) + 1.0001
+ilogp <- function(x, p = 0){
+  exp(x) + p
 }
 
 
@@ -423,6 +705,7 @@ draw_predictive_dist <- function(model, origin, list_spot = origin-299,
       lams <- sample(lams, n, TRUE)
     } 
     yyy[,i] <- rpois(n, lams)
+    yyy[which(yyy[,i] > 49),i] <- 49
   }
   yyy
 }
@@ -507,20 +790,15 @@ summarize_abunds <- function(x, digits = 2){
   round(out, digits)
 }
 
-#
-# figure functions to be pulled out to bbplot are in other scripts
 
-
-
-
-fig4_row <- function(x, draws, draws2, spits, frow, minx = 1, maxx = 30, 
+fig5_row <- function(x, draws, spits, frow, minx = 1, maxx = 30, 
                      nxs = 30, 
                      n_bins = 10, ym1 = 35, ym2 = 35, wex = 1.45, 
                      steps = 1:length(x), minstep = 490,
                      maxstep = 513, buff = 0.35, minp = 1e-3, vwidth = 0.5, 
                      xrange = 0:25, vxs = 501:512, vc = rgb(0.6, 0.6, 0.6), 
                      poc = rgb(0.4, 0.4, 0.4, 0.1),
-                     nfrows = 5, jitv = 0.4, seed = 1234, title = NULL){
+                     nfrows = 7, jitv = 0.4, seed = 1234, title = NULL){
   set.seed(seed)
   topoffset <- 0.94
   rtop <- topoffset - ((frow - 1) * topoffset) / nfrows
@@ -560,8 +838,8 @@ fig4_row <- function(x, draws, draws2, spits, frow, minx = 1, maxx = 30,
   abline(a = 0 , b = 1)
   
   for(i in 1:nvxs){
-    specs <- sample(1:nrow(draws2), 100)
-    xx <- draws2[specs,i]
+    specs <- sample(1:nrow(draws), 100)
+    xx <- draws[specs,i]
     yy <- rep(x[i+488], length(xx))
     xx2 <- xx + runif(length(yy), -jitv, jitv)
     yy2 <- yy + runif(length(yy), -jitv, jitv)
@@ -935,6 +1213,7 @@ eval_mod <- function(model = NULL, mod = NULL, abunds = NULL,
       lamst[which(lamst > 2e9)] <- 2e9
       lamst[which(lamst < 0)] <- 0
       ys[,i] <- rpois(n_chains * n_sample, lamst)
+      ys[which(ys[,i]>49),i] <- 49
     }
 
     PIT <- matrix(NA, nrow = lead_time, ncol = n_bins)
