@@ -1,0 +1,11 @@
+Package: pfe
+Title: Probabilistic Forecast Evaluation
+Version: 0.0.0.9000
+Authors@R: c(person(c("Juniper", "L."), "Simonis", email = "juniper.simonis@weecology.org", role = c("aut", "cre"), comment = c(ORCID = "0000-0001-9798-0460")),
+             person(c("Ethan", "P."), "White", role = c("aut"), comment = c(ORCID = "0000-0001-6728-7745")), 
+             person(c("S.K.", "Morgan"), "Ernest", role = c("aut"), comment = c(ORCID = "0000-0002-6026-8530")))
+Description: Tools for evaluating probabilistic forecasts.
+Depends: R (>= 3.5.1)
+License:  MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true

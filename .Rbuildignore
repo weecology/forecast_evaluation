@@ -1,0 +1,7 @@
+^manuscript$
+^\.Rproj\.user$
+^codecov\.yml$
+^LICENSE\.md$
+^CONTRIBUTING\.md$
+^CODE_OF_CONDUCT\.md$
+^README\.Rmd$
