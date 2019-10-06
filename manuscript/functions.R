@@ -1,775 +1,3 @@
-
-make_abunds_mat <- function(abunds, origins, lead_time = 12){
-  ntests <- length(origins)
-  abunds_mat <- matrix(NA, nrow = ntests, ncol = lead_time)
-  for(i in 1:ntests){
-    abunds_mat[i,] <- abunds[origins[i]+(1:12)]
-  }
-  abunds_mat
-}
-
-
-make_ens_eval_tab <- function(abunds, origins, lead_time, ensdrawl,
-                              n_bins = 10){
-
-  abunds_mat <- make_abunds_mat(abunds, origins, lead_time)
-
-  ntests <- dim(ensdraw_wn)[3]
-  nsteps <- dim(ensdraw_wn)[2]
-  nsamps <- dim(ensdraw_wn)[1]
-  nens <- length(ensdrawl)
-  eeval_tab <- matrix(NA, nrow = nens * ntests * nsteps, ncol = 16)
-  rinc <- 0
-  for(i in 1:ntests){
-
-    abundsi <- abunds_mat[i,]
-    origini <- origins[i]
-    destini <- origini + 1:lead_time
-    leadi <- 1:lead_time 
-
-    for(j in 1:nens){
-
-      PITj <- matrix(NA, nrow = lead_time, ncol = n_bins)
-      s_rj <- rep(NA, lead_time)
-      s_lj <- rep(NA, lead_time)
-
-      model_name <- names(ensdrawl)[j]
-      for(k in 1:lead_time){
-        yyy <- abundsi[k]
-        if(!is.na(yyy)){
-          drawjki <- ensdrawl[[j]][,k,i]
-          s_rj[k] <- -crps_sample(y = yyy, dat = drawjki)
-          s_lj[k] <- log(length(drawjki[drawjki==yyy])/length(drawjki))
-          PITj[k, ] <- nrPIT(yyy, ecdf(drawjki), n_bins)
-        }
-      }
-      rinc0 <- max(rinc)
-      rinc <- rinc0 + 1:lead_time
-      eeval_tab[rinc,1] <- rep(model_name, lead_time)
-      eeval_tab[rinc,2] <- rep(origini, lead_time)
-      eeval_tab[rinc,3] <- destini
-      eeval_tab[rinc,4] <- 1:lead_time
-      eeval_tab[rinc,5] <- s_rj
-      eeval_tab[rinc,6] <- s_lj
-      eeval_tab[rinc,7:16] <- PITj
-    }
-  }
-  colnames(eeval_tab) <- c("model", "origin", "destin", "lead", "crps", 
-                           "logs", paste0("PITint", 1:n_bins))
-  eeval_tab <- data.frame(eeval_tab)
-  eeval_tab
-}
-
-
-draw_from_cdftl <- function(n, cdftl){
-  pdftl <- pdftl_from_cdftl(cdftl)
-  draw_from_pdftl(n, pdftl)
-}
-
-pdftl_from_cdftl <- function(cdftl){
-  pdftl <- vector("list", length = length(cdftl))
-  for(i in 1:length(cdftl)){
-    pdftl[[i]] <- cdftl[[i]]
-    if(!all(is.na(pdftl[[i]]))){
-      pdftl[[i]]$y <- diff(c(0, cdftl[[i]]$y))
-    }
-  }
-  pdftl
-}
-
-draw_from_pdftl <- function(n, pdftl){
-  out <- matrix(NA, n, length(pdftl))
-  for(i in 1:length(pdftl)){
-    if(!all(is.na(pdftl[[i]]))){
-      out[,i] <- sample(pdftl[[i]]$x, n, replace = TRUE, prob = pdftl[[i]]$y)
-    }
-  }
-  out
-}
-
-stack_mods <- function(mods, abunds, rule = "crps", linkname = "identity", 
-                       test_origins = 300:499, last_in = 500, nsamps = 1000,
-                       lead_time = 12, list_spot_offset = 299, seed = NULL){
-
-  set.seed(seed)
-  nsteps <- lead_time
-  ntests <- length(test_origins)
-  nmods <- length(mods)
-  obs <- matrix(NA, nrow = ntests, ncol = nsteps)
-  for(i in 1:ntests){
-    spots <- test_origins[i] + 1:lead_time
-    spotsNA <- which(spots > last_in)
-    obs[i, ] <- abunds[spots]
-    obs[i, spotsNA] <- NA
-  }
-
-  dists <- array(NA, dim = c(nsamps, nsteps, nmods, ntests))
-  for(i in 1:ntests){
-    origin <- i + list_spot_offset
-    inp <- draw_predictive_dists(mods, origin = origin, last_in = last_in, 
-                                 n = nsamps)
-    dists[,1:dim(inp)[2],,i] <- inp
-  }
-
-  if(linkname == "identity"){ 
-    pars <- c(alr(c(1/3, 1/3, 1/3)))
-    names(pars) <- c(paste0("twt", 1:2))
-  } else if(linkname == "beta1"){
-    pars <- c(alr(c(1/3, 1/3, 1/3)), logp(2))
-    names(pars) <- c(paste0("twt", 1:2), "beta")
-  } else if(linkname == "beta2"){
-    pars <- c(alr(c(1/3, 1/3, 1/3)), logp(c(2, 2)))
-    names(pars) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
-  }  
-
-  optim(pars, ofn, dists = dists, obs = obs, rule = rule, 
-        linkname = linkname, control = list(fnscale = -1), hessian = TRUE)
-}
-
-
-ofn <- function(pars, dists, obs, rule, linkname){
-  wts <- ialr(pars[grepl("wt", names(pars))])
-  type <- switch(rule, "crps" = "cdf", "logscore" = "pdf")
-  combined <- combine(dists, wts, type)
-  linked <- link(combined, linkname, pars, raw = dists)
-  score(linked, obs, rule)
-}
-
-
-
-score <- function(dists, obs, rule, orientation = "pos"){
-  ntests <- length(dists)
-  nsteps <- length(dists[[1]])
-  scores <- matrix(NA, nrow = ntests, ncol = nsteps)
-  for(i in 1:ntests){
-    for(j in 1:nsteps){
-      if(!is.na(obs[i,j])){
-        scores[i,j] <- score_dist(dists[[i]][[j]], obs[i,j], rule, 
-                                  orientation)
-      }
-    }
-  }
-  sum(scores, na.rm = TRUE)
-}
-
-
-combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
-                           seed = NULL){
-  if(length(dim(dists)) == 3){
-    dists <- array(dists, dim = c(dim(dists), 1))
-  }
-  ntests <- dim(dists)[4]
-  nsteps <- dim(dists)[2]
-  nmodels <- dim(dists)[3]
-  out <- vector("list", length = ntests)
-  if(is.null(wts)){
-    wts <- rep(1/nmodels, nmodels)
-  }
-  if(is.null(dim(wts))){
-    wts <- matrix(wts, nrow = nsteps, ncol = nmodels, byrow = TRUE)
-  }
-  for(i in 1:ntests){
-    out1 <- vector("list", length = nsteps)
-    for(j in 1:nsteps){
-      out1[[j]] <- combine_dists(dists[,j,,i], wts[j,], method, nsamps, seed)
-    }
-    out[[i]] <- out1
-  }
-  out
-}
-
-
-
-
-link <- function(dists, linkname = "identity", pars = NULL, raw = NULL){
-  if(linkname == "identity"){
-    ldists <- dists
-  } else if(linkname == "beta1"){
-    ntests <- length(dists)
-    nsteps <- length(dists[[1]])
-    ldists <- dists
-    if (class(dists[[1]][[1]])[1] == "cdf"){
-      for(i in 1:ntests){
-        for(j in 1:nsteps){
-          if(!all(is.na(dists[[i]][[j]]))){
-            ldists[[i]][[j]]$y <- pbeta(dists[[i]][[j]]$y, 
-                                   ilogp(pars["beta"]), 
-                                   ilogp(pars["beta"]))
-          } 
-        }
-      }
-    }
-    if (class(dists[[1]][[1]])[1] == "pdf"){
-      wts <- ialr(pars[grepl("wt", names(pars))])
-      combined_cdfs <- combine(raw, wts, "cdf")
-      for(i in 1:ntests){
-        for(j in 1:nsteps){
-          if(!all(is.na(dists[[i]][[j]]))){
-            ldists[[i]][[j]]$y <- dists[[i]][[j]]$y * 
-                                  dbeta(combined_cdfs[[i]][[j]]$y, 
-                                        ilogp(pars["beta"]), 
-                                        ilogp(pars["beta"]))
-          }
-        }
-      }
-    }
-  } else if(linkname == "beta2"){
-    ntests <- length(dists)
-    nsteps <- length(dists[[1]])
-    ldists <- dists
-    if (class(dists[[1]][[1]])[1] == "cdf"){
-      for(i in 1:ntests){
-        for(j in 1:nsteps){
-          if(!all(is.na(dists[[i]][[j]]))){
-            ldists[[i]][[j]]$y <- pbeta(dists[[i]][[j]]$y, 
-                                        ilogp(pars["beta1"]), 
-                                        ilogp(pars["beta2"]))
-          }
-        }
-      }
-    }
-    if (class(dists[[1]][[1]])[1] == "pdf"){
-      wts <- ialr(pars[grepl("wt", names(pars))])
-      combined_cdfs <- combine(raw, wts, "cdf")
-      for(i in 1:ntests){
-        for(j in 1:nsteps){
-          if(!all(is.na(dists[[i]][[j]]))){
-            ldists[[i]][[j]]$y <- dists[[i]][[j]]$y * 
-                                  dbeta(combined_cdfs[[i]][[j]]$y, 
-                                        ilogp(pars["beta1"]), 
-                                        ilogp(pars["beta2"]))
-          }
-        }
-      }
-    }
-  }
-  ldists
-}
-
-
-
-############################
-
-listtomat <- function(x){
-  out <- matrix(NA, nrow = length(x[[1]]), ncol = length(x))
-  for(i in 1:length(x)){
-    out[,i] <- x[[i]]
-  }
-  out
-}
-
-test_sample_sizes <- function(abunds, origin = 300:499, lead = 12, 
-                              last = 500){
-  nstarts <- length(origin)
-  tss <- rep(NA, nstarts)
-  for(i in 1:nstarts){
-    ts <- (origin[i] + 1):(origin[i] + lead)
-    ts <- ts[ts <= last & !is.na(abunds[ts])]
-    tss[i] <- length(ts)
-  }
-  tss
-}
-
-multinom_wts <- function(abunds, stack_df, rule, link){
-  tss <- test_sample_sizes(abunds)
-  incl <- which(stack_df$rule == rule & stack_df$link == link)
-  tor <- stack_df$origin[incl]
-  yy <- as.matrix(stack_df[incl, 4:6])
-
-  mmod <- multinom(yy ~ tor, weights = tss)
-  predict(mmod, newdata = list(tor = 500), type = "probs")
-}
-
-load_stack_df <- function(){
-  load("model_output/stack_df.RData", envir = parent.frame(n = 2))
-}
-
-#stack_mods <- function(mods, test_origins, abunds, save = TRUE){
-#  ntos <- length(test_origins)
-#  pars1 <- c(alr(c(1/3, 1/3, 1/3)))
-#  names(pars1) <- c(paste0("twt", 1:2))
-#  pars2 <- c(alr(c(1/3, 1/3, 1/3)), logp(2))
-#  names(pars2) <- c(paste0("twt", 1:2), "beta")
-#  pars3 <- c(alr(c(1/3, 1/3, 1/3)), logp(c(2, 2)))
-#  names(pars3) <- c(paste0("twt", 1:2), paste0("beta", 1:2))
-
-
-#  stack_tab <- matrix(NA, nrow = ntos * 6, ncol = 9)
-#  rid <- 1
-#  for(i in 1:ntos){
-
-#    test_origin <- test_origins[i]
-#    print("#######################")
-#    print(paste0("test origin ", test_origin))
-#    dists <- draw_predictive_dists(mods, test_origin, last_in = 500)
-#    obs <- abunds[test_origin + 1:12]
-
-#    print("1")
-#    fit1 <- tryCatch(
-#              optim(pars1, ofn, dists = dists, obs = obs, rule = "crps", 
-#                    linkname = "identity", control = list(fnscale = -1)),
-#              error = function(x){list()})
-#    print("2")
-#    fit2 <- tryCatch(
-#               optim(pars2, ofn, dists = dists, obs = obs, rule = "crps", 
-#                     linkname = "beta1", control = list(fnscale = -1)),
-#              error = function(x){list()})
-#    print("3")
-#    fit3 <- tryCatch(
-#               optim(pars3, ofn, dists = dists, obs = obs, rule = "crps", 
-#                     linkname = "beta2", control = list(fnscale = -1)),
-#              error = function(x){list()})
-
-#    print("4")
-#    fit4 <- tryCatch(
-#              optim(pars1, ofn, dists = dists, obs = obs, rule = "logscore", 
-#                    linkname = "identity", control = list(fnscale = -1)),
-#              error = function(x){list()})
-#    print("5")
-#    fit5 <- tryCatch(
-#               optim(pars2, ofn, dists = dists, obs = obs, rule = "logscore", 
-#                     linkname = "beta1", control = list(fnscale = -1)),
-#              error = function(x){list()})
-#    print("6")
-#    fit6 <- tryCatch(
-#               optim(pars3, ofn, dists = dists, obs = obs, rule = "logscore", 
-#                     linkname = "beta2", control = list(fnscale = -1)),
-#              error = function(x){list()})
-#
-#    stack_tab[rid + 0, ] <- c(test_origin, "crps", "id", 
-#                              ialr(fit1$par), NA, NA, 
-#                              fit1$val)
-#    stack_tab[rid + 1, ] <- c(test_origin, "crps", "beta1", 
-#                              ialr(fit2$par[1:2]), ilogp(fit2$par[3]), NA,  
-#                              fit2$val)
-#    stack_tab[rid + 2, ] <- c(test_origin, "crps", "beta2", 
-#                              ialr(fit3$par[1:2]), ilogp(fit3$par[3:4]), 
-#                              fit3$val)
-#    stack_tab[rid + 3, ] <- c(test_origin, "logscore", "id", 
-#                              ialr(fit4$par), NA, NA, 
-#                              fit4$val)
-#    stack_tab[rid + 4, ] <- c(test_origin, "logscore", "beta1", 
-#                              ialr(fit5$par[1:2]), ilogp(fit5$par[3]), NA,  
-#                              fit5$val)
-#    stack_tab[rid + 5, ] <- c(test_origin, "logscore", "beta2", 
-#                              ialr(fit6$par[1:2]), ilogp(fit6$par[3:4]), 
-#                              fit6$val)
-#    rid <- rid + 6
-#  }
-
-#  stack_df <- data.frame(stack_tab, stringsAsFactors = FALSE)
-#  colnames(stack_df)<-c("origin", "rule", "link", paste0("wt", 1:3), 
-#                        "b1", "b2", "val")#
-
-#  for(i in c(1,4:9)){
-#    stack_df[,i] <- as.numeric(stack_df[,i])
-#  }
-
-#  if(save){
-#    save(stack_df, file = "model_output/stack_df.RData")
-#  }
-#  stack_df
-#}
-#
-#ofn <- function(pars, dists, obs, rule, linkname){
-#  wts <- ialr(pars[grepl("wt", names(pars))])
-#  type <- switch(rule, "crps" = "cdf", "logscore" = "pdf")
-#  combined <- combine(dists, wts, type)
-#  linked <- link(combined, linkname, pars, raw = dists)
-#  score(linked, obs, rule)
-#}
-
-
-#link <- function(dists, linkname = "identity", pars = NULL, raw = NULL){
-#  if(linkname == "identity"){
-#    ldists <- dists
-#  } else if(linkname == "beta1"){
-#    nsteps <- length(dists)
-#    ldists <- dists
-#    if (class(dists[[1]])[1] == "cdf"){
-#      for(i in 1:nsteps){
-#        ldists[[i]]$y <- pbeta(dists[[i]]$y, 
-#                               ilogp(pars["beta"]), 
-#                               ilogp(pars["beta"]))
-#      }
-#    }
-#    if (class(dists[[1]])[1] == "pdf"){
-#      wts <- ialr(pars[grepl("wt", names(pars))])
-#      combined_cdfs <- combine(raw, wts, "cdf")
-#      for(i in 1:nsteps){
-#        ldists[[i]]$y <- dists[[i]]$y * 
-#                         dbeta(combined_cdfs[[i]]$y, 
-#                               ilogp(pars["beta"]), 
-#                               ilogp(pars["beta"]))
-#      }
-#    }
-#  } else if(linkname == "beta2"){
-#    nsteps <- length(dists)
-#    ldists <- dists
-#    if (class(dists[[1]])[1] == "cdf"){
-#      for(i in 1:nsteps){
-#        ldists[[i]]$y <- pbeta(dists[[i]]$y, 
-#                               ilogp(pars["beta1"]), 
-#                               ilogp(pars["beta2"]))
-#      }
-#    }
-#    if (class(dists[[1]])[1] == "pdf"){
-#      wts <- ialr(pars[grepl("wt", names(pars))])
-#      combined_cdfs <- combine(raw, wts, "cdf")
-#      for(i in 1:nsteps){
-#        ldists[[i]]$y <- dists[[i]]$y * 
-#                         dbeta(combined_cdfs[[i]]$y, 
-#                               ilogp(pars["beta1"]), 
-#                               ilogp(pars["beta2"]))
-#      }
-#    }
-#  }
-#  ldists
-#}
-
-#score <- function(dists, obs, rule, orientation = "pos"){
-#  if(!"list" %in% class(dists)){
-#    dists <- list(dists)
-#  }
-#  nsteps <- length(dists)
-#  scores <- rep(NA, nsteps)
-#  for(i in 1:nsteps){
-#    if(!is.na(obs[i])){
-#      scores[i] <- score_dist(dists[[i]], obs[i], rule, orientation)
-#    }
-#  }
-#  sum(scores, na.rm = TRUE)
-#}
-
-score_dist <- function(dist, obs, rule, orientation = "pos"){
-  type <- class(dist)[1]
-  if(!is_int_conf(obs) | type == "draw" && !is_int_conf(dist)){
-    stop("not yet coded for continuous distributions, sorry!")
-  }
-  if(rule == "crps"){
-    if(type == "cdf"){
-      val <- crps_cdf(dist, obs, orientation)
-    } else if (type == "draw"){
-      val <- crps_draw(dist, obs, orientation)
-    }
-  } 
-  if(rule == "logscore"){
-    if(type == "pdf"){
-      val <- logs_pdf(dist, obs, orientation)
-    } else if (type == "draw"){
-      val <- logs_draw(dist, obs, orientation)
-    }
-  }
-  val
-}
-
-    
-logs_draw <- function(draw, obs, orientation = "pos"){
-  signtoggle <- switch(orientation, "pos" = 1, "neg" = -1)
-  log(length(which(draw == obs)) / length(draw)) * signtoggle  
-}
-
-logs_pdf <- function(pdf, obs, orientation = "pos"){
-  signtoggle <- switch(orientation, "pos" = 1, "neg" = -1)
-  yy <- sum(pdf$y)
-  log(pdf$y[pdf$x == obs] / yy) * signtoggle
-}
-
-
-crps_cdf <- function(cdf, obs, orientation = "pos"){
-  signtoggle <- switch(orientation, "pos" = -1, "neg" = 1)
-  k <- seq(min(cdf$x), max(cdf$x), 1)
-  nk <- length(k)
-  klocations <- match(k, cdf$x)
-  cp <- cdf$y[klocations]
-  cf <- rep(1, nk)
-  cf[which(obs > k)] <- 0
-  rpsv <- (cp - cf)^2
-  sum(rpsv) * signtoggle
-}
-
-
-crps_draw <- function(draw, obs, orientation = "pos"){
-  signtoggle <- switch(orientation, "pos" = -1, "neg" = 1)
-  crps_sample(obs, as.vector(draw)) * signtoggle
-}
-
-
-
-
-
-#combine <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
-#                           seed = NULL){
-#  ndims <- length(dim(dists))
-#  if(ndims == 2){
-#    dists <- array(dists, dim = c(dim(dists)[1], 1, dim(dists)[2]))
-#  }
-#  nsteps <- dim(dists)[2]
-#  out <- vector("list", length = nsteps)
-#  nmodels <- dim(dists)[3]
-#  if(is.null(wts)){
-#    wts <- rep(1/nmodels, nmodels)
-#  }
-#  if(is.null(dim(wts))){
-#    wts <- matrix(wts, nrow = nsteps, ncol = nmodels, byrow = TRUE)
-#  }
-#  for(i in 1:nsteps){
-#    out[[i]] <- combine_dists(dists[,i,], wts[i,], method, nsamps, seed)
-#  }
-#  if(ndims == 2){
-#    out[[1]]
-#  } else{
-#    out
-#  }
-#}
-
-
-
-
-
-combine_dists <- function(dists, wts = NULL, method = "cdf", nsamps = NULL, 
-                          seed = NULL, digits = 4){
-  if (all(is.na(dists))){
-    return(dists[,1])
-  }
-  wts <- enforce_wts(wts, nmods = ncol(dists))
-  if(method == "cdf"){
-    out <- combine_to_cdf(dists, wts, digits)
-  } else if(method == "pdf"){
-    out <- combine_to_pdf(dists, wts, digits)
-  } else if(method == "draw"){
-    out <- combine_to_draw(dists, wts, nsamps, seed)
-  }
-  out
-}
-
-
-combine_to_cdf <- function(dists, wts, digits = 4){
-  if(is_int_conf(dists)){
-    cdf <- combine_int_cdfs(dists, wts, digits)
-  } else{
-    stop("not yet coded for continuous distributions, sorry!")
-  }
-  class(cdf) <- c("cdf", class(cdf))
-  cdf
-}
-
-combine_to_pdf <- function(dists, wts, digits = 4){
-  if(is_int_conf(dists)){
-    pdf <- combine_int_pmfs(dists, wts, digits)
-  } else{
-    stop("not yet coded for continuous distributions, sorry!")
-  }
-  class(pdf) <- c("pdf", class(pdf))
-  pdf
-}
-
-combine_to_draw <- function(dists, wts, nsamps = NULL, seed = NULL){
-  set.seed(seed)
-  if(is.null(nsamps)){
-    nsamps <- nrow(dists)
-  }
-  ndists <- ncol(dists)
-  dist_choice <- sample(1:ndists, nsamps, TRUE, wts)
-  samp_choice <- sample(1:nsamps, nsamps, TRUE)
-  draw <- rep(NA, nsamps)
-  for(i in 1:nsamps){
-    draw[i] <- dists[samp_choice[i], dist_choice[i]]
-  }
-  class(draw) <- c("draw", class(draw))
-  draw
-}
-
-
-is_int_conf <- function(x){
-  all(x %% 1 == 0)
-}
-
-
-combine_int_cdfs <- function(dists, wts, digits = 4){
-  drange <- range(dists, na.rm = TRUE)
-  nmods <- ncol(dists)
-  x <- seq(drange[1], drange[2], 1)
-  y <- rep(0, length(x))
-  for(i in 1:nmods){
-    y <- y + wts[i] * ecdf(dists[,i])(x)
-  }
-  y <- round(y, digits)
-  incl <- 1:which(y == 1)[1]
-  data.frame(x = x[incl], y = y[incl])
-}
-
-
-combine_int_pmfs <- function(dists, wts, digits = 4){
-  drange <- range(dists, na.rm = TRUE)
-  nmods <- ncol(dists)
-  x <- seq(drange[1], drange[2], 1)
-  nvals <- length(x)
-  y <- rep(0, nvals)
-  for(i in 1:nmods){
-    nsamps <- nrow(dists)
-    tab <- table(dists[,i])
-    tabentries <- as.numeric(names(tab))
-    ylocations <- match(tabentries, x)
-    adder <- wts[i] * tab / nsamps
-    y[ylocations] <- y[ylocations] + adder
-  }
-  cumsumy <- round(cumsum(y), digits)
-  incl <- 1:which(cumsumy == 1)[1]
-  data.frame(x = x[incl], y = y[incl])
-}
-
-alr <- function(wts){
-  nwts <- length(wts)
-  log(wts[1:(nwts - 1)]/wts[nwts])
-}
-
-ialr <- function(twts){
-  allbut <- exp(twts)/(1 + sum(exp(twts)))
-  c(allbut, 1 - sum(allbut))
-}
-
-logp <- function(x, p = 0){
-  log(x - p)
-}
-
-ilogp <- function(x, p = 0){
-  exp(x) + p
-}
-
-
-
-
-
-
-enforce_wts <- function(wts = NULL, nmods = NULL){
-  if(is.null(wts)){
-    if(is.null(nmods)){
-      stop("wts or nmods must be specified")
-    }
-    wts <- rep(1/nmods, nmods)
-  } 
-  if(any(wts < 0) || round(sum(wts), 5) != 1){
-    stop("wts must be non-negative and sum to 1")
-  }
-  wts
-}
-
-draw_predictive_dists <- function(models, origin, list_spot = origin-299, 
-                                 max_lead_time = 12, last_in = Inf,
-                                 seed = NULL, n = NULL){
-
-  nmodels <- length(models)
-  mds <- vector("list", length = nmodels)
-  nsamps <- rep(NA, length = nmodels)
-  for(i in 1:nmodels){
-    mds[[i]] <- as.mcmc(
-                combine.mcmc(
-                as.mcmc.list(
-                  models[[1]][[list_spot]]$model), collapse.chains = TRUE))
-    nsamps[i] <- nrow(mds[[i]])
-  }
-  if(is.null(n)){
-    n <- max(nsamps)
-  }
-  lead_time <- length(which((origin + 1:max_lead_time) <= last_in))
-  yyy <- array(NA, dim = c(n, lead_time, nmodels))
-  for(i in 1:nmodels){
-    yyy[,,i] <- draw_predictive_dist(models[[i]], origin, list_spot,
-                                     max_lead_time, last_in, seed, n)
-  }
-  yyy
-}
-
-
-draw_predictive_dist <- function(model, origin, list_spot = origin-299, 
-                                 max_lead_time = 12, last_in = Inf,
-                                 seed = NULL, n = NULL){
-  
-  lead_time <- length(which((origin + 1:max_lead_time) <= last_in))
-
-  ini <- length(mod1[[list_spot]]$meta$in_timeseries) + 1
-  fini <- ini + lead_time
-  md <- as.mcmc(combine.mcmc(as.mcmc.list(model[[list_spot]]$model), 
-                            collapse.chains = TRUE))
-
-  if(is.null(n)){
-    n <- nrow(md)
-  }
-  yyy <- matrix(NA, nrow = n, ncol = lead_time)
-
-  set.seed(seed)
-  for(i in 1:lead_time){
-    lams <-  md[,paste0("predY[", (ini:fini)[i], "]")]
-    if(n != nrow(md)){
-      lams <- sample(lams, n, TRUE)
-    } 
-    yyy[,i] <- rpois(n, lams)
-    yyy[which(yyy[,i] > 49),i] <- 49
-  }
-  yyy
-}
-
-
-fig4 <- function(abunds, moon_dates){
-  tiff("fig4.tiff", width = 6, height = 3, units = "in", res = 200)
-
-  par(fig = c(0, 1, 0, 1), mar = c(1.25, 2.125, 1, 1))
-  daterange <- as.Date(c("1993-08-01", "2019-01-01"))
-  blank(bty = "L", xlim = daterange, ylim = c(-0.5, 18))
-
-  rectx1 <- as.Date(moon_dates[300]) - 14
-  rectx2 <- as.Date(moon_dates[500]) + 14
-  rectcol1 <- rgb(0.7, 0.7, 0.7, 0.4)
-  rect(rectx1, -0.3, rectx2, 18, col = rectcol1, border = NA)
-  rectx1 <- as.Date(moon_dates[501]) - 14
-  rectx2 <- as.Date(moon_dates[512]) + 14
-  rectcol1 <- rgb(0.2, 0.2, 0.2, 0.4)
-  rect(rectx1, -0.3, rectx2, 18, col = rectcol1, border = NA)
-
-
-  x <- as.Date(moon_dates[200:512])
-  y <- abunds[200:512]
-  set.seed(123)
-  yy <- y + runif(length(y), -0.25, 0.25)
-  nas <- which(is.na(y))
-  points(x[-nas], yy[-nas], type = "l", col = rgb(0.1, 0.1, 0.1, 0.5))
-  points(x, yy, cex = 0.6, pch = 16, col = rgb(1, 1, 1, 1))
-  points(x, yy, cex = 0.6, col = rgb(0.1, 0.1, 0.1, 0.5))
-  axis(2, at = seq(0, 15, 5), labels = FALSE, tck = -0.0225)
-  axis(2, at = seq(0, 15, 5), las = 1, lwd = 0, line = -0.5, cex.axis = 0.7)
-  axis(2, at = seq(0, 18, 1), labels = FALSE, tck = -0.01)
-  mtext(side = 2, line = 1.1, cex = 0.8, 
-        expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
-  datevals <- as.Date(paste0(1993:2019, "-01-01"))
-  axis(1, at = datevals, labels = FALSE, tck = -0.01)
-  datevals <- as.Date(paste0(seq(1995, 2019, 5), "-01-01"))
-  datelabs <- seq(1995, 2019, 5)
-  axis(1, at = datevals, labels = datelabs, lwd = 0, line = -0.9, 
-       cex.axis = 0.7)
-  axis(1, at = datevals, labels = FALSE, tck = -0.02)
-  
-  par(fig = c(0.1, 0.35, 0.5, 1), mar = c(1.25, 1.5, 1, 0.5), new = TRUE)
-  blank(bty = "L", xlim = c(-0.5, 17.5), ylim = c(0, 0.4))
-  tt <- table(abunds[200:512])
-  points(tt/sum(tt))
-
-  axis(1, at = seq(0, 15, 5), labels = FALSE, tck = -0.025)
-  axis(1, at = seq(0, 15, 5), las = 1, lwd = 0, line = -1.25, cex.axis = 0.5)
-  axis(1, at = seq(0, 18, 1), labels = FALSE, tck = -0.015)
-  mtext(side = 1, line = 0.35, cex = 0.5, 
-        expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
-
-  axis(2, at = seq(0, 0.4, 0.1), labels = FALSE, tck = -0.025)
-  axis(2, at = seq(0, 0.4, 0.1), las = 1, lwd = 0, line = -0.75,
-       cex.axis = 0.5)
-  axis(2, at = seq(0, 0.4, 0.05), labels = FALSE, tck = -0.01)
-  mtext(side = 2, line = 1.1, cex = 0.5, "Frequency")
-
-  dev.off()
-}
-
-
 load_models <- function(modns, small = FALSE){
   if (small){
     fnames <- paste0("model_output/mod", modns, "_withoutmodels.RData")
@@ -781,172 +9,6 @@ load_models <- function(modns, small = FALSE){
   }
 }
 
-
-summarize_abunds <- function(x, digits = 2){
-  x2 <- na.omit(x)
-  out <- c(n_all = length(x), n = length(x2), min = min(x2), max = max(x2), 
-           median = median(x2),
-           mean = mean(x2), var = var(x2), skewness = skewness(x2))
-  round(out, digits)
-}
-
-
-fig5_row <- function(x, draws, spits, frow, minx = 1, maxx = 30, 
-                     nxs = 30, 
-                     n_bins = 10, ym1 = 35, ym2 = 35, wex = 1.45, 
-                     steps = 1:length(x), minstep = 490,
-                     maxstep = 513, buff = 0.35, minp = 1e-3, vwidth = 0.5, 
-                     xrange = 0:25, vxs = 501:512, vc = rgb(0.6, 0.6, 0.6), 
-                     poc = rgb(0.4, 0.4, 0.4, 0.1),
-                     nfrows = 7, jitv = 0.4, seed = 1234, title = NULL){
-  set.seed(seed)
-  topoffset <- 0.94
-  rtop <- topoffset - ((frow - 1) * topoffset) / nfrows
-  rbot <- max(c(0, rtop - topoffset / nfrows))
-
-  par(fig = c(0, 0.5, rbot, rtop), mar = c(1, 1, 1.25, 0.5), 
-       new = TRUE)
-
-  blank(bty = "L", xlim = c(minstep - buff, maxstep + buff), ylim = c(0, ym1))
-  nvxs <- length(vxs)
-  for(j in 1:nvxs){
-    vx <- vxs[j] - 500 
-    violin(draws[, vx], vxs[vx], wex = wex, col = vc, border = NA)
-  }
-  points(steps[steps >= minstep], x[steps >= minstep], cex = 0.4, pch = 16)
-  axis(side = 2, at = seq(0, ym1, 5), tck = -0.01, labels = FALSE)
-  axis(side = 2, at = seq(0, ym1, 10), tck = -0.03, labels = FALSE)
-  mtext(side = 2, at = seq(0, ym1, 10), seq(0, ym1, 10), xpd = NA, las = 1,
-        line = 0.25, cex = 0.5)
-  axis(side = 1, at = seq(490, 515, 5), tck = -0.01, labels = FALSE)
-  axis(side = 1, at = seq(490, 510, 10), tck = -0.03, labels = FALSE)
-  axis(side = 1, at = 489.1, tck = -0.08, labels = FALSE)
-  mtext(side = 1, at = 489.1, line = 0., cex = 0.5, "2017")
-  axis(side = 1, at = 501.4, tck = -0.08, labels = FALSE)
-  mtext(side = 1, at = 501.4, line = 0., cex = 0.5, "2018")
-  axis(side = 1, at = 513.8, tck = -0.08, labels = FALSE)
-  mtext(side = 1, at = 513.8, line = 0., cex = 0.5, "2019")
-
-
-  par(fig = c(0, 1, rtop - 0.1, rtop), new = TRUE)
-  blank()
-  text(x = 0.575, y = 1.65, title, cex = 0.75, xpd = NA, adj = 0)
-
-  par(fig = c(0.5, 0.75, rbot, rtop), new = TRUE)
-
-  blank(bty = "L", xlim = c(-1, ym2), ylim = c(-1, ym2))
-  abline(a = 0 , b = 1)
-  
-  for(i in 1:nvxs){
-    specs <- sample(1:nrow(draws), 100)
-    xx <- draws[specs,i]
-    yy <- rep(x[i+488], length(xx))
-    xx2 <- xx + runif(length(yy), -jitv, jitv)
-    yy2 <- yy + runif(length(yy), -jitv, jitv)
-    points(xx2, yy2, col = poc, cex = 0.75)
-  }
-
-  axis(side = 1, at = seq(0, ym1, 5), tck = -0.01, labels = FALSE)
-  axis(side = 1, at = seq(0, ym1, 10), tck = -0.03, labels = FALSE)
-  mtext(side = 1, at = seq(0, ym1, 10), seq(0, ym1, 10), xpd = NA, las = 1,
-        line = -0.25, cex = 0.5)
-  axis(side = 2, at = seq(0, ym1, 5), tck = -0.01, labels = FALSE)
-  axis(side = 2, at = seq(0, ym1, 10), tck = -0.03, labels = FALSE)
-  mtext(side = 2, at = seq(0, ym1, 10), seq(0, ym1, 10), xpd = NA, las = 1,
-        line = 0.25, cex = 0.5)
-
-  par(fig = c(0.75, 1, rbot, rtop), new = TRUE)
-
-  blank(xlim = c(1, 10), ylim = c(0, max(spits) * 1.25), bty = "L")
-  abline(h = 1, lty = 3)
-  points(spits, type = "h", lwd = 2)
-
-}
-
-
-
-fig3_row <- function(x, draws, frow, minx = 1, maxx = 30, nxs = 30, 
-                     n_bins = 10, ym1 = 35, ym2 = 45, wex = 1.45, 
-                     steps = 1:length(x), minstep = 1,
-                     maxstep = 30, buff = -0.5, minp = 1e-3, vwidth = 0.5, 
-                     xrange = 0:25, vxs = 1:30, vc = rgb(0.6, 0.6, 0.6), 
-                     poc = rgb(0, 0, 0, 0.025),
-                     nfrows = 7, jitv = 0.4, seed = 1234, title = NULL){
-  set.seed(seed)
-  topoffset <- 0.94
-  rtop <- topoffset - ((frow - 1) * topoffset) / nfrows
-  rbot <- max(c(0, rtop - topoffset / nfrows))
-
-  par(fig = c(0, 0.6, rbot, rtop), mar = c(0.5, 0.5, 1.25, 0.5), 
-       new = TRUE)
-
-  blank(bty = "L", xlim = c(minstep - buff, maxstep + buff), ylim = c(0, ym1))
-  nvxs <- length(vxs)
-  for(j in 1:nvxs){
-    vx <- vxs[j]
-    violin(draws[, vx], vx, wex = wex, col = vc, border = NA)
-  }
-  points(steps[steps >= minstep], x[steps >= minstep], cex = 0.4, pch = 16)
-
-  par(fig = c(0, 1, rtop - 0.1, rtop), new = TRUE)
-  blank()
-  text(x = 0.575, y = 1.65, title, cex = 0.75, xpd = NA, adj = 0)
-
-  par(fig = c(0.6, 0.8, rbot, rtop), new = TRUE)
-
-  blank(bty = "L", xlim = c(0, ym2), ylim = c(0, ym2))
-  abline(a = 0 , b = 1)
-  
-  for(i in 1:nlams){
-    specs <- sample(1:nrow(draws), 100)
-    xx <- draws[specs,i]
-    yy <- rep(x[i], length(xx))
-    xx2 <- xx + runif(length(yy), -jitv, jitv)
-    yy2 <- yy + runif(length(yy), -jitv, jitv)
-    points(xx2, yy2, col = poc, cex = 0.75)
-  }
-  par(fig = c(0.8, 1, rbot, rtop), new = TRUE)
-
-  cdf <- function(x, lam){ecdf(lam)(x)}
-
-  nx <- length(x)
-  pits <- matrix(NA, nrow = nx, ncol = n_bins)
-  for(i in 1:nlams){
-    pits[i,] <- nrPIT(x[i], cdf, n_bins, draws[,i])
-  }
-  
-  spits <- apply(pits, 2, mean)
-  blank(xlim = c(1, 10), ylim = c(0, max(spits) * 1.25), bty = "L")
-  abline(h = 1, lty = 3)
-  points(spits, type = "h", lwd = 2)
-
-}
-
-
-
-mass <- function(x, min = NULL, max = NULL){
-  if (!all(x %% 1 == 0)){
-    stop("x must be integer conformable")
-  }
-  xin <- na.omit(x)
-  N <- length(xin)
-  min <- if_null(min, min(xin))
-  max <- if_null(max, max(xin))
-  x <- seq.int(min, max)
-  nx <- length(x)
-  yraw <- rep(NA, nx)
-  for(i in 1:nx){
-    yraw[i] <- length(xin[xin == x[i]])
-  }
-  y <- yraw / N
-  out <- list(x = x, y = y, n = N)
-  class(out) <- c("mass", "list")
-  out
-}
-
-
-#
-#
 make_eval_tab <- function(mod1, mod2, mod3){
   npitc <- ncol(mod1[[1]]$eval$PIT)
   evalmat <- matrix(NA, nrow = 3 * length(mod1) * 12, ncol = 6 + npitc)
@@ -977,176 +39,47 @@ make_eval_tab <- function(mod1, mod2, mod3){
 
   colnames(evalmat) <- c("model", "origin", "destin", "lead", "crps", "logs",
                          paste0("PITint", 1:npitc))
-  evalmat <- data.frame(evalmat)
-  evalmat
+  data.frame(evalmat)
 }
+mods <- function(model = NULL, abunds = NULL, moon_dates = NULL, 
+                 in_timeseries = list(1:500), lead_time = 12, 
+                 n_chains = 3, n_burnin = 5000, n_sample = 10000, n_thin = 1,
+                 n_bins = 10, n_adapt = 1000, keeploc = FALSE, quiet = FALSE,
+                 save_preds = FALSE, save_raw = TRUE, save_small = TRUE){
+  out <- vector("list", length = length(in_timeseries))
+  for(i in 1:length(in_timeseries)){
+    out[[i]] <- tryCatch(
+                  modi(model = model, abunds = abunds, 
+                       moon_dates = moon_dates,
+                       in_timeseries = in_timeseries[[i]], 
+                       lead_time = lead_time,
+                       n_chains = n_chains, n_burnin = n_burnin, 
+                       n_sample = n_sample, n_thin = n_thin, n_bins = n_bins,
+                       n_adapt = n_adapt, keeploc = keeploc, quiet = quiet,
+                       save_preds = save_preds),
+                  error = function(x){NA})
+    names(out)[i] <- run_namer(model, in_timeseries[[i]], lead_time)
+  }
+  modname <- paste0("mod", model)
+  assign(modname, out)
+  if (save_raw){
+    fname <- paste0("model_output/mod", model, "_withmodels.RData")
+    save(list = modname, file = fname)
+  }
+  if (save_small){
+    fname <- paste0("model_output/mod", model, "_withoutmodels.RData")
 
 
-plot_sp_abunds <- function(plot = NULL, species = NULL){
-
-  abunds_C <- summarize_rodent_data(level = "plot", plots = plot, 
-                                    min_plots = 1, clean = FALSE)
-
-  moons <- load_trapping_data(clean = FALSE)$newmoons_table
-  abunds <- rep(NA, nrow(moons))
-  for(i in 1:nrow(moons)){
-    matchrow <- which(abunds_C$period == moons$period[i])
-    if (length(matchrow) == 1){
-      abunds[i] <- as.numeric(abunds_C[matchrow, species])
+    out2 <- vector("list", length = length(out))
+    for(i in 1:length(out)){
+      out2[[i]] <- list(summary = out[[i]]$summary, data = out[[i]]$data,
+                        meta = out[[i]]$meta, eval = out[[i]]$eval)
     }
-  }
-  abunds
-}
-
-training_ts <- function(starts = 1, ends = 100){
-  if(length(starts) == 1){
-    starts <- rep(starts, length(ends))
-  } else if (length(starts) != length(ends)){
-    stop("starts not length 1 or length of ends")
-  }
-  n_ts <- length(ends)
-  in_ts <- vector("list", length = n_ts)
-  for(i in 1:n_ts){
-    in_ts[[i]] <- starts[i]:ends[i]
-  }
-  in_ts
-}
-
-
-save_without_models <- function(modobj, file){
-  mods <- vector("list", length = length(modobj))
-  for(i in 1:length(modobj)){
-    mods[[i]] <- list(summary = modobj[[i]]$summary, data = modobj[[i]]$data,
-                      meta = modobj[[i]]$meta, eval = modobj[[i]]$eval)
-  }
-  names(mods) <- names(modobj)
-  assign(deparse(substitute(modobj)), mods)
-  save(list = deparse(substitute(modobj)), file = file)
-
-}
-
-### function for nonrandomized PIT histogram 
-###
-### input: 
-###   x    observed data 
-###   cdf   CDF
-###   n_bins number of bins to use
-
-# adapted from Czado, Gneiting and Held, Biometrics
-
-nrPIT <- function(x, cdf, n_bins = 10, ...){
-  a.mat <- matrix(0,n_bins,length(x))
-  for (i in 1:length(x)){
-    Px <- cdf(x[i], ...)
-    Px1 <- cdf(x[i] - 1, ...)
-    k.vec <- pmax(ceiling(n_bins*Px1),1)
-    m.vec <- ceiling(n_bins*Px)
-    d.vec <- Px-Px1
-    if (k.vec == m.vec){
-      a.mat[k.vec,i]=1
-    } else { 
-      a.mat[k.vec,i] <- ((k.vec/n_bins)-Px1)/d.vec
-      if ((k.vec+1)<=(m.vec-1)){
-        for (j in ((k.vec+1):(m.vec-1))){ 
-          a.mat[j,i] <- (1/(n_bins*d.vec))
-        }
-      }
-      a.mat[m.vec,i] <- (Px-((m.vec-1)/n_bins))/d.vec     
-    }
-  }
-  a <- apply(a.mat, 1, sum)
-  (n_bins*a)/(length(x))
-}
-
-
-inits_fun <- function(model){
-  rngs <- c("base::Wichmann-Hill", "base::Marsaglia-Multicarry",
-            "base::Super-Duper", "base::Mersenne-Twister")
-  out <- function(chain = chain){NULL}
-  if (model == 1){
-    out <- function(chain = chain){
-             list(.RNG.name = sample(rngs, 1),
-                  .RNG.seed = sample(1:1e+06, 1),
-                  mu0 = rnorm(1, 0, 1),
-                  tau = rgamma(1, shape = 0.1, rate = 0.1))
-           }
-  }
-  if (model == 2){
-    out <- function(chain = chain){
-             list(.RNG.name = sample(rngs, 1),
-                  .RNG.seed = sample(1:1e+06, 1),
-                  mu0 = rnorm(1, 0, 1),
-                  tau = rgamma(1, shape = 0.1, rate = 0.1),
-                  phi = runif(1, -0.95, 0.95))
-           }
-  }
-  if (model == 3){
-    out <- function(chain = chain){
-             list(.RNG.name = sample(rngs, 1),
-                  .RNG.seed = sample(1:1e+06, 1),
-                  mu0 = rnorm(1, 0, 1),
-                  tau = rgamma(1, shape = 0.1, rate = 0.1),
-                  phi = runif(1, -0.95, 0.95),
-                  beta1 = rnorm(1, 0, 2),
-                  beta2 = rnorm(1, 0, 2))
-    }
-  }
-  out
-}
-
-monitor_fun <- function(model, meta = NULL, obs = TRUE, obstype = "lead"){
-  if (model == 1){
-    out <- c("sd", "mu0")
-  }
-  if (model == 2){
-    out <- c("sd", "mu0", "phi")
-  }
-  if (model == 3){
-    out <- c("sd", "mu0", "phi", "beta1", "beta2")
-  }
-  if (obs){
-    if (obstype == "lead"){
-      ptimes <- max(meta$in_timeseries) + 1:meta$lead_time - 
-                min(meta$in_timeseries) + 1
-      preds <- paste0("predY[", ptimes, "]")
-      out <- c(out, preds)
-    }
-    if (obstype == "all"){
-      out <- c(out, "predY")
-    }
-  }
-  out
-}
-
-foy <- function(dates){
-  dates <- as.Date(dates)
-  yr <- format(dates, "%Y")
-  nye <- as.Date(paste0(yr, "-12-31"))
-  jnye <- as.numeric(format(nye, "%j"))
-  jdates <- as.numeric(format(dates, "%j"))
-  round(jdates/jnye, 4)
-}
-
-data_fun <- function(model, abunds, in_timeseries, lead_time, 
-                     moon_dates = NULL){
-  if(model %in% 1:2){
-    Y <- c(abunds[in_timeseries], rep(NA, lead_time))
-    meanY <- mean(Y, na.rm = TRUE)
-    out <- list(Y = Y, N = length(Y), meanY = meanY)
-  }
-  if (model == 3){
-    all_in <- (min(in_timeseries)):(max(in_timeseries) + lead_time)    
-    fryr <- foy(moon_dates[all_in])
-    Y <- c(abunds[in_timeseries], rep(NA, lead_time))
-    meanY <- mean(Y, na.rm = TRUE)
-    out <- list(Y = Y, N = length(Y), meanY = meanY,
-                sinyr = sin(fryr), cosyr = cos(fryr))
+    names(out2) <- names(out)
+    assign(modname, out2)
+    save(list = modname, file = fname)
   }
   out 
-}
-
-name_fun <- function(model){
-  paste0("model_scripts/mod", model, ".txt")
 }
 
 
@@ -1241,52 +174,94 @@ eval_mod <- function(model = NULL, mod = NULL, abunds = NULL,
   out
 }
 
+name_fun <- function(model){
+  paste0("model_scripts/mod", model, ".txt")
+}
 
-mods <- function(model = NULL, abunds = NULL, moon_dates = NULL, 
-                 in_timeseries = list(1:500), lead_time = 12, 
-                 n_chains = 3, n_burnin = 5000, n_sample = 10000, n_thin = 1,
-                 n_bins = 10, n_adapt = 1000, keeploc = FALSE, quiet = FALSE,
-                 save_preds = FALSE, save_raw = TRUE, save_small = TRUE){
-  out <- vector("list", length = length(in_timeseries))
-  for(i in 1:length(in_timeseries)){
-    out[[i]] <- tryCatch(
-                  modi(model = model, abunds = abunds, 
-                       moon_dates = moon_dates,
-                       in_timeseries = in_timeseries[[i]], 
-                       lead_time = lead_time,
-                       n_chains = n_chains, n_burnin = n_burnin, 
-                       n_sample = n_sample, n_thin = n_thin, n_bins = n_bins,
-                       n_adapt = n_adapt, keeploc = keeploc, quiet = quiet,
-                       save_preds = save_preds),
-                  error = function(x){NA})
-    names(out)[i] <- run_namer(model, in_timeseries[[i]], lead_time)
+
+foy <- function(dates){
+  dates <- as.Date(dates)
+  yr <- format(dates, "%Y")
+  nye <- as.Date(paste0(yr, "-12-31"))
+  jnye <- as.numeric(format(nye, "%j"))
+  jdates <- as.numeric(format(dates, "%j"))
+  round(jdates/jnye, 4)
+}
+
+data_fun <- function(model, abunds, in_timeseries, lead_time, 
+                     moon_dates = NULL){
+  if(model %in% 1:2){
+    Y <- c(abunds[in_timeseries], rep(NA, lead_time))
+    meanY <- mean(Y, na.rm = TRUE)
+    out <- list(Y = Y, N = length(Y), meanY = meanY)
   }
-  modname <- paste0("mod", model)
-  assign(modname, out)
-  if (save_raw){
-    fname <- paste0("model_output/mod", model, "_withmodels.RData")
-    save(list = modname, file = fname)
-  }
-  if (save_small){
-    fname <- paste0("model_output/mod", model, "_withoutmodels.RData")
-
-
-    out2 <- vector("list", length = length(out))
-    for(i in 1:length(out)){
-      out2[[i]] <- list(summary = out[[i]]$summary, data = out[[i]]$data,
-                        meta = out[[i]]$meta, eval = out[[i]]$eval)
-    }
-    names(out2) <- names(out)
-    assign(modname, out2)
-    save(list = modname, file = fname)
+  if (model == 3){
+    all_in <- (min(in_timeseries)):(max(in_timeseries) + lead_time)    
+    fryr <- foy(moon_dates[all_in])
+    Y <- c(abunds[in_timeseries], rep(NA, lead_time))
+    meanY <- mean(Y, na.rm = TRUE)
+    out <- list(Y = Y, N = length(Y), meanY = meanY,
+                sinyr = sin(fryr), cosyr = cos(fryr))
   }
   out 
 }
-
-messageq <- function(txt = NULL, quiet = FALSE){
-  if (!quiet){
-    message(txt)
+inits_fun <- function(model){
+  rngs <- c("base::Wichmann-Hill", "base::Marsaglia-Multicarry",
+            "base::Super-Duper", "base::Mersenne-Twister")
+  out <- function(chain = chain){NULL}
+  if (model == 1){
+    out <- function(chain = chain){
+             list(.RNG.name = sample(rngs, 1),
+                  .RNG.seed = sample(1:1e+06, 1),
+                  mu0 = rnorm(1, 0, 1),
+                  tau = rgamma(1, shape = 0.1, rate = 0.1))
+           }
   }
+  if (model == 2){
+    out <- function(chain = chain){
+             list(.RNG.name = sample(rngs, 1),
+                  .RNG.seed = sample(1:1e+06, 1),
+                  mu0 = rnorm(1, 0, 1),
+                  tau = rgamma(1, shape = 0.1, rate = 0.1),
+                  phi = runif(1, -0.95, 0.95))
+           }
+  }
+  if (model == 3){
+    out <- function(chain = chain){
+             list(.RNG.name = sample(rngs, 1),
+                  .RNG.seed = sample(1:1e+06, 1),
+                  mu0 = rnorm(1, 0, 1),
+                  tau = rgamma(1, shape = 0.1, rate = 0.1),
+                  phi = runif(1, -0.95, 0.95),
+                  beta1 = rnorm(1, 0, 2),
+                  beta2 = rnorm(1, 0, 2))
+    }
+  }
+  out
+}
+
+monitor_fun <- function(model, meta = NULL, obs = TRUE, obstype = "lead"){
+  if (model == 1){
+    out <- c("sd", "mu0")
+  }
+  if (model == 2){
+    out <- c("sd", "mu0", "phi")
+  }
+  if (model == 3){
+    out <- c("sd", "mu0", "phi", "beta1", "beta2")
+  }
+  if (obs){
+    if (obstype == "lead"){
+      ptimes <- max(meta$in_timeseries) + 1:meta$lead_time - 
+                min(meta$in_timeseries) + 1
+      preds <- paste0("predY[", ptimes, "]")
+      out <- c(out, preds)
+    }
+    if (obstype == "all"){
+      out <- c(out, "predY")
+    }
+  }
+  out
 }
 
 run_namer <- function(model, in_times = 1, lead_time = 1){
@@ -1301,27 +276,109 @@ run_namer <- function(model, in_times = 1, lead_time = 1){
   paste0(modname, ": ", name1, "; ", name2)
 }
 
+plot_sp_abunds <- function(plot = NULL, species = NULL){
 
-# graphics functions for drawing a variety of violins
-# still in development but pretty and flexible right now
-# also will get pulled over into bbplot 
+  abunds_C <- summarize_rodent_data(level = "plot", plots = plot, 
+                                    min_plots = 1, clean = FALSE)
 
-#' @param x The vector of values or function to be summarized
-#' @param location The graphical location with respect to the axes where
-#'   the violin is to be placed. Default assumption is for the x-axis, but
-#'   can be a named-by-axis vector.
-#' @param type Character indicating the type of plotting. Defaults to NULL
-#'   which defines itself then based on the support for x to 
-#'   either "l" (line) for continuous and "r" (histogram-like rectangles) for 
-#'   non-continuous/integer-conformable
-#' @param wex Numeric height scale that transforms the distribution
-#'   evalution to the plotting axis value. now wex for width expansion
-#' @param nvalues Integer number of values to use for the drawing of the 
-#'   violin. If NULL, set by vtype. 
-# also now have values explicitly
-# rotate T/F, wrt the plotting axes
-# side top bottom both
+  moons <- load_trapping_data(clean = FALSE)$newmoons_table
+  abunds <- rep(NA, nrow(moons))
+  for(i in 1:nrow(moons)){
+    matchrow <- which(abunds_C$period == moons$period[i])
+    if (length(matchrow) == 1){
+      abunds[i] <- as.numeric(abunds_C[matchrow, species])
+    }
+  }
+  abunds
+}
 
+training_ts <- function(starts = 1, ends = 100){
+  if(length(starts) == 1){
+    starts <- rep(starts, length(ends))
+  } else if (length(starts) != length(ends)){
+    stop("starts not length 1 or length of ends")
+  }
+  n_ts <- length(ends)
+  in_ts <- vector("list", length = n_ts)
+  for(i in 1:n_ts){
+    in_ts[[i]] <- starts[i]:ends[i]
+  }
+  in_ts
+}
+
+
+
+# function for nonrandomized PIT histogram 
+# inputs: 
+#   x    observed data 
+#   cdf   CDF
+#   n_bins number of bins to use
+# adapted from Czado, Gneiting and Held, Biometrics
+nrPIT <- function(x, cdf, n_bins = 10, ...){
+  a.mat <- matrix(0,n_bins,length(x))
+  for (i in 1:length(x)){
+    Px <- cdf(x[i], ...)
+    Px1 <- cdf(x[i] - 1, ...)
+    k.vec <- pmax(ceiling(n_bins*Px1),1)
+    m.vec <- ceiling(n_bins*Px)
+    d.vec <- Px-Px1
+    if (k.vec == m.vec){
+      a.mat[k.vec,i]=1
+    } else { 
+      a.mat[k.vec,i] <- ((k.vec/n_bins)-Px1)/d.vec
+      if ((k.vec+1)<=(m.vec-1)){
+        for (j in ((k.vec+1):(m.vec-1))){ 
+          a.mat[j,i] <- (1/(n_bins*d.vec))
+        }
+      }
+      a.mat[m.vec,i] <- (Px-((m.vec-1)/n_bins))/d.vec     
+    }
+  }
+  a <- apply(a.mat, 1, sum)
+  (n_bins*a)/(length(x))
+}
+
+
+
+if_null <- function(x = NULL, val_if_null = NULL){
+  if (is.null(x)){
+    val_if_null
+  } else {
+    x
+  }
+}
+
+messageq <- function(txt = NULL, quiet = FALSE){
+  if (!quiet){
+    message(txt)
+  }
+}
+
+mass <- function(x, min = NULL, max = NULL){
+  if (!all(x %% 1 == 0)){
+    stop("x must be integer conformable")
+  }
+  xin <- na.omit(x)
+  N <- length(xin)
+  min <- if_null(min, min(xin))
+  max <- if_null(max, max(xin))
+  x <- seq.int(min, max)
+  nx <- length(x)
+  yraw <- rep(NA, nx)
+  for(i in 1:nx){
+    yraw[i] <- length(xin[xin == x[i]])
+  }
+  y <- yraw / N
+  out <- list(x = x, y = y, n = N)
+  class(out) <- c("mass", "list")
+  out
+}
+
+blank <- function(x = 1, y = 1, type = "n", xlab = "", ylab = "", 
+                  xaxt = "n", yaxt = "n", bty = "n", ...){
+  plot(x = x, y = y, type = type, xlab = xlab, ylab = ylab, 
+                  xaxt = xaxt, yaxt = yaxt, bty = bty, ...)
+}
 
 violin <- function(x, location = NULL, rotate = TRUE,
                    type = NULL, wex = 1, values = NULL, nvalues = NULL, 
@@ -1402,14 +459,40 @@ violin_width_values <- function(dist_values, type = "l", wex = 1,
   }
 }
 
-#' determines the values of the variable to evaluate (x_values) and the 
-#' resulting evaluation values (y_values) of the distribution. these are 
-#' the raw values
-#'
-#' @return data.frame of x and y  
-#'
-#' @export
-#' 
+
+default_violin_type <- function(x = NULL){
+  type <- "l"
+  if (!is.numeric(x)){
+    stop("presently only supported for numeric values")
+  } 
+  if (all(x %% 1 == 0)){
+    type <- "r"
+  }
+  type
+}
+
+
+violin_location <- function(location = NULL, rotate = TRUE){
+  if(is.null(location)){
+    out <- c(x = 0, y = 0)
+  } else {
+    if (is.null(names(location))){
+      out <- c(x = location[1], y = location[2])
+      out[which(is.na(out))] <- 0      
+    } else {
+      out <- c(location["x"], location["y"])
+      out[which(is.na(out))] <- 0
+    }
+  }
+  if(!rotate){
+    names(out) <- c("y", "x")
+  } else{
+    names(out) <- c("x", "y")
+  }
+  out
+}
+
+
 dist_values <- function(x, values = NULL, nvalues = NULL, type = "l"){
 
   if (is.null(values)) {
@@ -1466,17 +549,6 @@ dist_y_values <- function(x, xvals){
   yvals
 }
 
-if_null <- function(x = NULL, val_if_null = NULL){
-  if (is.null(x)){
-    val_if_null
-  } else {
-    x
-  }
-}
-
-
-
-#' nrf n reduction factor
 
 default_nvalues <- function(x, type = "l", nrf = NULL, minn = NULL, 
                             maxn = NULL){
@@ -1504,46 +576,678 @@ default_nvalues <- function(x, type = "l", nrf = NULL, minn = NULL,
 
 
 
+fig1 <- function(){
+  tiff("fig1.tiff", width = 6, height = 5, units = "in", res = 200)
+  rc <- rgb(0.8, 0.8, 0.8)
+
+  par(mar = c(2.5, 1.75, 0, 0.75), fig = c(0, 1, 0.007, 0.49))
 
 
-default_violin_type <- function(x = NULL){
-  type <- "l"
-  if (!is.numeric(x)){
-    stop("presently only supported for numeric values")
-  } 
-  if (all(x %% 1 == 0)){
-    type <- "r"
+  blank(bty = "L", xlim = c(0,1.25), ylim = c(0,1))
+  box(bty = "L", lwd = 2)
+  set.seed(123)
+  x1 <- seq(0, 0.85, 0.025)
+  offs <- c(0, -0.005, 0.005)
+  n <- length(x1)
+  x2 <- x1 + sample(offs, n, replace = TRUE, prob = c(0.8, 0.1, 0.1))
+  NAs <- sample(c(TRUE, FALSE), n, replace = TRUE, prob = c(0.2, 0.8))
+  x3 <- x2
+  x3[NAs] <- NA
+  x3[n] <- x3[n] + 0.02
+
+  set.seed(123)
+  y1 <- 0.35 + 0.175 * sin(x2/0.75 * 2 * pi)
+  y2 <- y1 + rnorm(n, 0, 0.1)
+  x4 <- c(x3, 0.95)
+  n <- length(x4)
+  y3 <- c(y2, y2[n-1] - 0.025)
+  points(x4, y3, pch = 1, cex = 0.85, lwd = 2)
+  set.seed(123)
+  fx <- c(0.995, 1.08, 1.15, 1.225)
+  fn <- length(fx)
+  fy1 <- 0.35 + 0.175 * sin(fx/0.75 * 2 * pi)
+  fy2 <- fy1 + rnorm(fn, 0, 0.1)
+
+  mtext(side = 2, "y ~ G", line = 0.75)
+  mtext(side = 1, "Time", line = 0.6)
+  axis(side = 1, at = seq(0, 1.25, 0.05), tck = -0.02, labels = FALSE, 
+       lwd = 2)
+  axis(side = 1, at = seq(0, 1.25, 0.25), tck = -0.04, labels = FALSE, 
+       lwd = 2)
+  axis(side = 2, at = seq(0, 1, 0.25), tck = -0.02, labels = FALSE, lwd = 2)
+  axis(side = 2, at = seq(0, 1, 0.5), tck = -0.04, labels = FALSE, lwd = 2)
+
+  arrows(x4[n-1] - 0.05, y3[n-1] + 0.225, x4[n-1] - 0.005, y3[n-1] + 0.03, 
+         length = 0.05, lwd = 2)
+  text(x4[n-1] - 0.0625, y3[n-1] + 0.275, cex = 0.8, 
+        expression(italic("y"[o-1])))
+  mtext(side = 1, at = x4[n-1], cex = 0.8, line = 0.5, 
+        expression(italic("t"[o-1])))
+  points(rep(x4[n-1], 2), c(-0.1, y3[n-1] - 0.02), type = "l", lty = 2, 
+         lwd = 2, xpd = TRUE)
+  points(rep(x4[n], 2), c(-0.1, y3[n] - 0.02), type = "l", lty = 2, lwd = 2, 
+         xpd = TRUE)
+  mtext(side = 1, at = x4[n], cex = 0.8, line = 0.5, 
+        expression(italic("t"[o])))
+
+  points(fx, fy2, pch = 1, cex = 0.85, lwd = 2)
+  mtext(side = 1, at = fx[fn] + 0.03, cex = 0.8, line = 0.5, 
+        expression(italic("t"[o+P]*" = "*"t"[N])))
+  points(rep(fx[fn], 2), c(-0.1, fy2[fn] - 0.02), type = "l", lty = 2, 
+         lwd = 2, xpd = TRUE)
+
+  points(c(x4[n], fx[fn]), rep(-0.26, 2), type = "l", lwd = 2, xpd = TRUE)
+  points(rep(fx[fn], 2), c(-0.31, -0.2), type = "l", lwd = 2, xpd = TRUE)
+  points(rep(x4[n], 2), c(-0.31, -0.2), type = "l", lwd = 2, xpd = TRUE)
+  text(x = mean(c(x4[n], fx[fn])), y = -0.22, "forecast horizon", 
+       font = 3, cex = 0.55, xpd = TRUE)
+  text(x = mean(c(x4[n], fx[fn])), y = -0.29, "or lead time", 
+       font = 3, cex = 0.55, xpd = TRUE)
+
+  text(x = x4[n] - 0.1375, y = -0.29, "forecast origin", 
+       font = 3, cex = 0.55, xpd = TRUE)
+
+  arrows(x4[n] - 0.065, -0.28, x4[n] - 0.02, -0.17, length = 0.05, xpd = TRUE,
+         lwd = 2)
+
+  arrows(x4[1] + 0.02, y3[1] + 0.5, x4[1] + 0.002, y3[1] + 0.03, 
+         length = 0.05, lwd = 2)
+  text(x4[1] + 0.025, y3[1] + 0.55, cex = 0.8, expression(italic("y"[1])))
+  mtext(side = 1, at = x4[1], cex = 0.8, line = 0.5, 
+        expression(italic("t"[1])))
+  points(rep(x4[1], 2), c(-0.1, y3[1] - 0.02), type = "l", lty = 2, lwd = 2, 
+         xpd = TRUE)
+
+  u <- par("usr") 
+  arrows(u[1], u[3], u[2], u[3], length = 0.1, lwd = 2, xpd = TRUE) 
+  for(i in 1:fn){
+    set.seed(123)
+    Gn <- c(rnorm(1e4, fy2[i] - 0.05, 0.1), rnorm(i*9e4, fy2[i] - 0.1, 0.25))
+    Gn2 <- Gn[-which(Gn < 0.02)]
+    dens <- density(Gn2)
+    incl <- which(dens$x < 0.85)
+
+    xxa <- fx[i] + dens$y[incl] * 0.01
+    xxb <- fx[i] - dens$y[incl] * 0.01
+    xx <- c(xxa, xxb[length(xxb):1])
+    xx2 <- c(xx, xx[1])
+    yy <- c(dens$x[incl], dens$x[incl][length(dens$x[incl]):1])
+    yy2 <- c(yy, yy[1])
+    polygon(xx2, yy2, col = rc)
+
   }
-  type
+  points(fx, fy2, pch = 16, cex = 0.85, lwd = 2, col = 0)
+  points(fx, fy2, pch = 1, cex = 0.85, lwd = 2)
+
+  text(fx[1] + 0.04, fy2[1] + 0.45, cex = 0.8, 
+        expression(italic("y"[o+1])))
+  arrows(fx[1] + 0.02, fy2[1] + 0.4, fx[1] + 0.002, fy2[1] + 0.03, 
+         length = 0.05, lwd = 2)
+
+  par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0, 0.72), new = TRUE)
+  blank(ylim = c(0, 1), xlim = c(0, 1))
+  text(x = 0, y = 1, "(b)", cex = 1.1, xpd = TRUE)
+
+
+  par(mar = c(0.5, 1.25, 0.5, 0), fig = c(0.475, 0.675, 0.483, 0.693), 
+      new = TRUE)
+
+  set.seed(123)
+  Gn <- c(rnorm(1e4, y3[n-1] - 0.05, 0.1), rnorm(7e3, y3[n-1] - 0.1, 0.25))
+  Gn2 <- Gn[-which(Gn < 0.05)]
+  dens <- density(Gn2)
+  blank(bty = "L", xlim = c(0,1), ylim = c(0,max(dens$y)*1.01))
+  box(bty = "L", lwd = 2)
+  points(dens$x, dens$y, type = "l", lwd = 2)
+  axis(side = 1, at = seq(0, 1.25, 0.25), tck = -0.025, labels = FALSE, 
+       lwd = 2)
+  axis(side = 1, at = seq(0, 1, 0.5), tck = -0.05, labels = FALSE, lwd = 2)
+  mtext(side = 1, at = 0.4, cex = 0.8, line = 0.25, expression("G"[o-1]))
+
+  u <- par("usr") 
+  yatx <- min(dens$y[which(round(dens$x, 2) == round(y3[n-1], 2))])
+  points(rep(y3[n-1], 2), c(u[3], yatx), type = "l", lwd = 2, lty = 3)
+  points(c(y3[n-1], y3[n-1] + 0.13), c(u[3], -1.6), type = "l", lwd = 2, 
+         lty = 3, xpd = NA)
+  mtext(side = 2, cex = 0.7, line = 0.25, "Density") 
+
+  par(mar = c(0.5, 1.25, 0.5, 0), fig = c(0.05, 0.25, 0.483, 0.693), 
+      new = TRUE)
+
+  set.seed(123)
+  Gn <- c(rnorm(1e4, y3[1] + 0.05, 0.1), rnorm(7e3, y3[1] + 0.1, 0.25))
+  Gn2 <- Gn[-which(Gn < 0.05)]
+  dens <- density(Gn2)
+  blank(bty = "L", xlim = c(0,1), ylim = c(0,max(dens$y)*1.01))
+  box(bty = "L", lwd = 2)
+  points(dens$x, dens$y, type = "l", lwd = 2)
+  axis(side = 1, at = seq(0, 1.25, 0.25), tck = -0.025, labels = FALSE, 
+       lwd = 2)
+  axis(side = 1, at = seq(0, 1, 0.5), tck = -0.05, labels = FALSE, lwd = 2)
+  mtext(side = 1, cex = 0.8, line = 0.25, expression("G"[1]))
+ 
+  u <- par("usr") 
+  yatx <- min(dens$y[which(round(dens$x, 2) == round(y3[1], 2))])
+
+  points(rep(y3[1], 2), c(u[3], yatx), type = "l", lwd = 2, lty = 3)
+  points(c(y3[1], y2[1] - 0.2), c(u[3], -1.6), type = "l", lwd = 2, lty = 3, 
+         xpd = NA)
+  mtext(side = 2, cex = 0.7, line = 0.25, "Density") 
+
+  par(mar = c(0.5, 1.25, 0.5, 0), fig = c(0.75, 0.9755, 0.483, 0.693), 
+      new = TRUE)
+
+  set.seed(123)
+  Gn <- c(rnorm(1e4, fy2[1] - 0.05, 0.1), rnorm(9e3, fy2[1] - 0.1, 0.25))
+  Gn2 <- Gn[-which(Gn < 0.02)]
+  dens <- density(Gn2)
+  Hn <- c(rnorm(1e4, fy2[1] - 0.05, 0.1), rnorm(9e4, fy2[1] - 0.1, 0.25))
+  Hn2 <- Hn[-which(Hn < 0.02)]
+  densH <- density(Hn2)
+
+  blank(bty = "L", xlim = c(0,1.1), ylim = c(0,max(dens$y)*1.01))
+  box(bty = "L", lwd = 2)
+  points(densH$x, densH$y, type = "l", lwd = 2, col = rc)
+  points(dens$x, dens$y, type = "l", lwd = 2)
+  axis(side = 1, at = seq(0, 1.25, 0.25), tck = -0.025, labels = FALSE, 
+       lwd = 2)
+  axis(side = 1, at = seq(0, 1, 0.5), tck = -0.05, labels = FALSE, lwd = 2)
+  mtext(side = 1, cex = 0.8, at = 0.75, line = 0.25, 
+        expression("H"[o+1]*", "*"G"[o+1]))
+  yatx <- min(dens$y[which(round(dens$x, 2) == round(fy2[1], 2))])
+
+  u <- par("usr") 
+  points(rep(fy2[1], 2), c(u[3], yatx), type = "l", lwd = 2, lty = 3)
+  points(c(fy2[1], fy2[1] - 0.475), c(u[3], -1.1), type = "l", lwd = 2, 
+         lty = 3, xpd = NA)
+  mtext(side = 2, cex = 0.7, line = 0.25, "Density") 
+
+
+
+  par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0.7, 1), new = TRUE)
+  blank(ylim = c(0, 1), xlim = c(0, 1))
+  text(x = 0, y = 0.95, "(a)", cex = 1.1, xpd = TRUE)
+
+  set.seed(123)
+  x1 <- rnorm(1e6)
+  x2 <- rnorm(1e6, 0, 1.5)
+  x3 <- rt(1e6, 3.5, 0)
+  x4 <- c(rnorm(3e5, 2.25, 2), rnorm(7e5, -0.965, 1))
+  x5 <- c(rnorm(5e5, -3), rnorm(5e5, 3))
+  x6 <- c(rnorm(3e5, -5, 0.5), rnorm(3e5, 5, 0.5), rnorm(4e5, 0))
+
+  par(mar = c(1.5, 2.5, 1.5, 1.5), c(0, 1, 0.7, 1), new = TRUE)
+  blank(bty = "L", xlim = c(-10, 10), ylim = c(0, 0.55))
+  points(density(x1), type = "l", lwd = 2, col = grey(0, 0.6))
+  points(density(x2), type = "l", lwd = 2, col = grey(0.1, 0.6))
+  points(density(x3), type = "l", lwd = 2, col = grey(0.2, 0.6))
+  points(density(x4), type = "l", lwd = 2, col = grey(0.3, 0.6))
+  points(density(x5), type = "l", lwd = 2, col = grey(0.4, 0.6))
+  points(density(x6), type = "l", lwd = 2, col = grey(0.5, 0.6))
+  axis(1, at = seq(-10, 10, 1), tck = -0.04, labels = FALSE)
+  axis(1, at = seq(-10, 10, 5), tck = -0.07, labels = FALSE)
+  axis(1, at = seq(-10, 10, 5), line = -0.7, lwd = 0, cex.axis = 0.75)
+
+
+  axis(2, at = seq(0, 0.6, 0.1), tck = -0.04, labels = FALSE)
+  axis(2, at = seq(0, 0.5, 0.5), tck = -0.07, labels = FALSE)
+  axis(2, at = seq(0, 0.5, 0.5), line = -0.5, lwd = 0, las =1 , 
+       cex.axis = 0.75)
+
+
+  mtext(side = 2, line = 1.5, "Density", cex = 0.75)
+
+  dev.off()
 }
 
+fig2 <- function(){
 
-violin_location <- function(location = NULL, rotate = TRUE){
-  if(is.null(location)){
-    out <- c(x = 0, y = 0)
-  } else {
-    if (is.null(names(location))){
-      out <- c(x = location[1], y = location[2])
-      out[which(is.na(out))] <- 0      
-    } else {
-      out <- c(location["x"], location["y"])
-      out[which(is.na(out))] <- 0
+  tiff("fig2.tiff", width = 6, height = 4, units = "in", res = 200)
+  rc <- rgb(0.8, 0.8, 0.8)
+  par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0.9, 1))
+  blank(bty = "n", xlim = c(-1, 20.5), ylim = c(0, 2))
+
+  rect(2, 0.7, 2.75, 1.7)
+  text(x = 3, y = 1.2, "Training datum", adj = 0, cex = 0.6)
+  rect(5.75, 0.7, 6.5, 1.7, col = rc)
+  rect(5.75, 0.7, 6.5, 1.7)
+  text(x = 6.75, y = 1.2, "Test datum", adj = 0, cex = 0.6)
+  rect(9.25, 0.7, 10, 1.7, lty = 2)
+  text(x = 10.25, y = 1.2, "Not yet observed datum", adj = 0, cex = 0.6)
+  rect(14.75, 0.7, 15.5, 1.7, lwd = 2)
+  text(x = 15.75, y = 1.2, "Forecast origin", adj = 0, cex = 0.6)
+
+  par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0.61, 0.91), new = TRUE)
+  blank(bty = "n", xlim = c(-1, 20.5), ylim = c(0, 2))
+  text(-1.5, 2.07, "a", cex = 1.125, font = 2, xpd = NA)
+  text(-1.1, 2.06, "Single origin end-sample testing", cex = 0.7, font = 3, 
+       xpd = NA, adj = 0)
+
+  lbox <- c(rep(1, 17), rep(2, 3))
+
+  trains <- 1:14
+  tests <- 15:17
+  oos <- 18:20
+
+  rect(-1.5, 1.4, 1, 1.87)
+  text(x = -0.25, y = 1.635, "Sample", cex = 0.7, xpd = NA)
+  rect(1, 1.4, max(tests) + 1, 1.87)
+  rect(max(tests) + 1, 1.4, max(oos) + 1, 1.87, lty = 2)
+
+  for(i in 1:max(oos)){
+  ltyy <- 0
+    if (i < max(tests)){
+      ltyy <- 1
+    } else if(i < max(oos)){
+      ltyy <- 2
+    } 
+    text(x = i + 0.5, y = 1.635, i, cex = 0.7)
+    points(rep(i + 1, 2), c(1.4, 1.87), type = "l", lty = ltyy)
+  }
+ 
+  rect(-1.5, 0.82, 1, 1.29)
+  text(x = -0.25, y = 1.133, "Test origin = 14", cex = 0.5, xpd = NA)
+  text(x = -0.25, y = 0.9763, "True origin = 17", cex = 0.5, xpd = NA)
+  rect(max(trains) + 1, 0.82, max(tests) + 1, 1.29, lty = 0, col = rc)
+  rect(1, 0.82, max(tests) + 1, 1.29)
+  rect(max(tests) + 1, 0.82, max(oos) + 1, 1.29, lty = 2)
+
+  for(i in 1:max(oos)){
+    ltyy <- 0
+    if (i < max(tests)){
+      ltyy <- 1
+    } else if(i < max(oos)){
+      ltyy <- 2
+    }
+    points(rep(i + 1, 2), c(0.82, 1.29), type = "l", lty = ltyy)
+    if (i == max(trains)){
+      rect(i, 0.82, i + 1, 1.29, lty = 1, lwd = 2)
+      text(x = i + 0.5, y = 1.055, expression("n"["o"[test]]), cex = 0.7)
+    }
+    if (i == max(tests)){
+      rect(i, 0.82, i + 1, 1.29, lty = 1, lwd = 2)
+      text(x = i + 0.5, y = 1.055, expression("n"["o"[true]]), cex = 0.7)
     }
   }
-  if(!rotate){
-    names(out) <- c("y", "x")
-  } else{
-    names(out) <- c("x", "y")
+  
+  par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0.0, 0.7), new = TRUE)
+  blank(bty = "n", xlim = c(-1, 20.5), ylim = c(0, 2))
+ 
+  lbox <- c(rep(1, 17), rep(2, 3))
+
+  rect(-1.5, 1.77, 1, 1.97)
+  text(x = -0.25, y = 1.87, "Sample", cex = 0.7, xpd = NA)
+  for(i in 1:20){
+    rect(i, 1.77, i + 1, 1.97, lty = lbox[i])
+    text(x = i + 0.5, y = 1.87, i, cex = 0.7)
   }
-  out
+ 
+  y10 <- 1.52
+  y20 <- 1.72
+  no <- 10:17
+  p1 <- no + 1
+  p2 <- no + 2
+  p3 <- no + 3
+
+  for(j in 1:8){
+    y1 <- y10 - (j - 1) * 0.2 - (j) * 0.02
+    y2 <- y20 - (j - 1) * 0.2 - (j) * 0.02
+    y12 <- mean(c(y1, y2))
+    rect(-1.5, y1, 1, y2)
+    rect(1, y1, j + 10, y2)
+    for(i in 1:(j+9)){
+      points(c(i, i), c(y1, y2), type = "l")
+    }
+    if (j < 8){
+      otext <- paste0("Test origin = ", 9 + j)
+      text(x = -0.25, y = y12,otext, cex = 0.5, xpd = NA)
+      t1 <- j + 9
+      t2 <- min(max(tests), j + 12)
+      rect(t1 + 1, y1, t2 + 1, y2, lty = 0, col = rc)
+      rect(t1 + 1, y1, t2 + 1, y2, lty = 1)
+      for(i in t1:t2){
+        points(c(i, i), c(y1, y2), type = "l")
+      }
+      rect(j + 9, y1, j + 10, y2, lty = 1, lwd = 2)
+      text(x = j + 9.5, y = y12, expression("n"["o"[test]]), cex = 0.7)
+    } else{
+      otext <- paste0("True origin = ", 9 + j)
+      text(x = -0.25, y = y12,otext, cex = 0.5, xpd = NA)
+      rect(max(tests) + 1, y1, max(oos) + 1, y2, lty = 2)
+      for(i in j:11){
+        points(c(i+9, i+9), c(y1, y2), type = "l", lty = 2)
+      }
+      rect(17, y1, 18, y2, lty = 1, lwd = 2)
+      text(x = 17.5, y = y12, expression("n"["o"[true]]), cex = 0.7)
+    } 
+   
+  }
+
+  text(-1.5, 2.07, "b", cex = 1.125, font = 2, xpd = NA)
+  text(-1.1, 2.06, "Rolling origin end-sample testing", cex = 0.7, font = 3, 
+       xpd = NA, adj = 0)
+
+  dev.off()
+}
+
+fig3 <- function(){
+  set.seed(321)
+
+  xs <- seq(1, 50, length.out = 30)
+  lams <- 8 + 0.25 * xs + 3 * sin(2 * pi * xs / 15)
+  nlams <- length(lams)
+  x <- rpois(nlams, lambda = lams)
+  N <- 1e4
+
+  tiff("fig3.tiff", width = 6, height = 7, units = "in", res = 200)
+
+  topoffset <- 0.94
+  par(fig = c(0, 0.6, topoffset, 1), mar = c(0, 0, 0, 0))
+  blank()
+  text(x = 1, y = 1.15, "Time series of predictive distributions and", 
+       cex = 0.8)
+  text(x = 1, y = 0.825, "true observations", cex = 0.8, font = 1)
+  par(fig = c(0.6, 0.8, topoffset, 1), new = TRUE)
+  blank()
+  text(x = 1, y = 1.15, "Observed (y) vs.", cex = 0.8, font = 1)
+  text(x = 1, y = 0.825, "Predicted (x)", cex = 0.8, font = 1)
+  par(fig = c(0.8, 1, topoffset, 1), new = TRUE)
+  blank()
+  text(x = 1, y = 1.15, "Probability Integral", cex = 0.8, font = 1)
+  text(x = 1, y = 0.825, "Transform (PIT)", cex = 0.8, font = 1)
+
+  draws1 <- sapply(lams, rpois, n = N)
+  fig3_row(x, draws1, 1, title = "True generating distribution")
+
+  draws2 <- sapply(lams + 2, rpois, n = N)
+  fig3_row(x, draws2, 2, title = "Positively biased")
+
+  draws3 <- sapply(lams - 2, rpois, n = N)
+  fig3_row(x, draws3, 3, title = "Negatively biased")
+
+  draws4 <- sapply(x, rpois, n = N)
+  fig3_row(x, draws4, 4, title = "Too accurate")
+
+  draws5 <- matrix(NA, nrow = N, ncol = nlams)
+  for(i in 1:nlams){
+    draws5[,i] <- round(rnorm(N, lams[i], sd = sqrt(lams[i]) / 1.6))
+  }
+  fig3_row(x, draws5, 5, title = "Too precise")
+
+  draws6 <- matrix(NA, nrow = N, ncol = nlams)
+  for(i in 1:nlams){
+    draws6[,i] <- rnbinom(N, mu = lams[i], size = 1)
+  }
+  fig3_row(x, draws6, 6, title = "Too imprecise")
+
+  draws7 <- matrix(NA, nrow = N, ncol = nlams)
+  for(i in 1:nlams){
+    draws7[,i] <-  c(rpois(N/2, max(c(0, lams[i] - 5))), 
+                     rpois(N/2, lams[i] + 5))
+  }
+  fig3_row(x, draws7, 7, title = "Bimodal with proper median")
+
+  dev.off()
+}
+
+
+fig3_row <- function(x, draws, frow, minx = 1, maxx = 30, nxs = 30, 
+                     n_bins = 10, ym1 = 35, ym2 = 45, wex = 1.45, 
+                     steps = 1:length(x), minstep = 1,
+                     maxstep = 30, buff = -0.5, minp = 1e-3, vwidth = 0.5, 
+                     xrange = 0:25, vxs = 1:30, vc = rgb(0.6, 0.6, 0.6), 
+                     poc = rgb(0, 0, 0, 0.025), 
+                     nfrows = 7, jitv = 0.4, seed = 1234, title = NULL){
+  set.seed(seed)
+  topoffset <- 0.94
+  rtop <- topoffset - ((frow - 1) * topoffset) / nfrows
+  rbot <- max(c(0, rtop - topoffset / nfrows))
+  nlams <- dim(draws)[2]
+  par(fig = c(0, 0.6, rbot, rtop), mar = c(0.5, 0.5, 1.25, 0.5), 
+       new = TRUE)
+
+  blank(bty = "L", xlim = c(minstep - buff, maxstep + buff), ylim = c(0, ym1))
+  nvxs <- length(vxs)
+  for(j in 1:nvxs){
+    vx <- vxs[j]
+    violin(draws[, vx], vx, wex = wex, col = vc, border = NA)
+  }
+  points(steps[steps >= minstep], x[steps >= minstep], cex = 0.4, pch = 16)
+
+  par(fig = c(0, 1, rtop - 0.1, rtop), new = TRUE)
+  blank()
+  text(x = 0.575, y = 1.65, title, cex = 0.75, xpd = NA, adj = 0)
+
+  par(fig = c(0.6, 0.8, rbot, rtop), new = TRUE)
+
+  blank(bty = "L", xlim = c(0, ym2), ylim = c(0, ym2))
+  abline(a = 0 , b = 1)
+  
+  for(i in 1:nlams){
+    specs <- sample(1:nrow(draws), 100)
+    xx <- draws[specs,i]
+    yy <- rep(x[i], length(xx))
+    xx2 <- xx + runif(length(yy), -jitv, jitv)
+    yy2 <- yy + runif(length(yy), -jitv, jitv)
+    points(xx2, yy2, col = poc, cex = 0.75)
+  }
+  par(fig = c(0.8, 1, rbot, rtop), new = TRUE)
+
+  cdf <- function(x, lam){ecdf(lam)(x)}
+
+  nx <- length(x)
+  pits <- matrix(NA, nrow = nx, ncol = n_bins)
+  for(i in 1:nlams){
+    pits[i,] <- nrPIT(x[i], cdf, n_bins, draws[,i])
+  }
+  
+  spits <- apply(pits, 2, mean)
+  blank(xlim = c(1, 10), ylim = c(0, max(spits) * 1.25), bty = "L")
+  abline(h = 1, lty = 3)
+  points(spits, type = "h", lwd = 2)
+
 }
 
 
 
-blank <- function(x = 1, y = 1, type = "n", xlab = "", ylab = "", 
-                  xaxt = "n", yaxt = "n", bty = "n", ...){
-  plot(x = x, y = y, type = type, xlab = xlab, ylab = ylab, 
-                  xaxt = xaxt, yaxt = yaxt, bty = bty, ...)
+fig4 <- function(abunds, moon_dates){
+  tiff("fig4.tiff", width = 6, height = 3, units = "in", res = 200)
+
+  par(fig = c(0, 1, 0, 1), mar = c(1.25, 2.125, 1, 1))
+  daterange <- as.Date(c("1993-08-01", "2019-01-01"))
+  blank(bty = "L", xlim = daterange, ylim = c(-0.5, 18))
+
+  rectx1 <- as.Date(moon_dates[300]) - 14
+  rectx2 <- as.Date(moon_dates[500]) + 14
+  rectcol1 <- rgb(0.7, 0.7, 0.7, 0.4)
+  rect(rectx1, -0.3, rectx2, 18, col = rectcol1, border = NA)
+  rectx1 <- as.Date(moon_dates[501]) - 14
+  rectx2 <- as.Date(moon_dates[512]) + 14
+  rectcol1 <- rgb(0.2, 0.2, 0.2, 0.4)
+  rect(rectx1, -0.3, rectx2, 18, col = rectcol1, border = NA)
+
+
+  x <- as.Date(moon_dates[200:512])
+  y <- abunds[200:512]
+  set.seed(123)
+  yy <- y + runif(length(y), -0.25, 0.25)
+  nas <- which(is.na(y))
+  points(x[-nas], yy[-nas], type = "l", col = rgb(0.1, 0.1, 0.1, 0.5))
+  points(x, yy, cex = 0.6, pch = 16, col = rgb(1, 1, 1, 1))
+  points(x, yy, cex = 0.6, col = rgb(0.1, 0.1, 0.1, 0.5))
+  axis(2, at = seq(0, 15, 5), labels = FALSE, tck = -0.0225)
+  axis(2, at = seq(0, 15, 5), las = 1, lwd = 0, line = -0.5, cex.axis = 0.7)
+  axis(2, at = seq(0, 18, 1), labels = FALSE, tck = -0.01)
+  mtext(side = 2, line = 1.1, cex = 0.8, 
+        expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
+  datevals <- as.Date(paste0(1993:2019, "-01-01"))
+  axis(1, at = datevals, labels = FALSE, tck = -0.01)
+  datevals <- as.Date(paste0(seq(1995, 2019, 5), "-01-01"))
+  datelabs <- seq(1995, 2019, 5)
+  axis(1, at = datevals, labels = datelabs, lwd = 0, line = -0.9, 
+       cex.axis = 0.7)
+  axis(1, at = datevals, labels = FALSE, tck = -0.02)
+  
+  par(fig = c(0.1, 0.35, 0.5, 1), mar = c(1.25, 1.5, 1, 0.5), new = TRUE)
+  blank(bty = "L", xlim = c(-0.5, 17.5), ylim = c(0, 0.4))
+  tt <- table(abunds[200:512])
+  points(tt/sum(tt))
+
+  axis(1, at = seq(0, 15, 5), labels = FALSE, tck = -0.025)
+  axis(1, at = seq(0, 15, 5), las = 1, lwd = 0, line = -1.25, cex.axis = 0.5)
+  axis(1, at = seq(0, 18, 1), labels = FALSE, tck = -0.015)
+  mtext(side = 1, line = 0.35, cex = 0.5, 
+        expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
+
+  axis(2, at = seq(0, 0.4, 0.1), labels = FALSE, tck = -0.025)
+  axis(2, at = seq(0, 0.4, 0.1), las = 1, lwd = 0, line = -0.75,
+       cex.axis = 0.5)
+  axis(2, at = seq(0, 0.4, 0.05), labels = FALSE, tck = -0.01)
+  mtext(side = 2, line = 1.1, cex = 0.5, "Frequency")
+
+  dev.off()
 }
 
+fig5 <- function(mod1, mod2, mod3, nbins = 10, last_in = 500){
 
+  tiff("fig5.tiff", width = 6, height = 4, units = "in", res = 200)
+
+  par(fig = c(0, 1, 0, 1))
+  blank()
+
+  eval_tab <- make_eval_tab(mod1, mod2, mod3)
+  umods <- unique(eval_tab$model)
+  numods <- length(umods)
+  mod_ids <- umods
+  mod_names <- c("RW", "AR(1)", "cAR(1)")
+  mod_names2 <- gsub(" Ensemble", "", mod_names)
+  PITs <- matrix(NA, nrow = numods, ncol = nbins)
+  crpss <- rep(NA, numods)
+  logss <- rep(NA, numods)
+  for(i in 1:numods){
+    incl <- which(eval_tab$model == umods[i] & eval_tab$destin <= last_in)
+    eval_tabi <- eval_tab[incl,]
+    PITcols <- grepl("PIT", colnames(eval_tabi))
+    eval_tabiPIT <- eval_tabi[,PITcols]
+    for(j in 1:ncol(eval_tabiPIT)){
+      eval_tabiPIT[,j] <- as.numeric(eval_tabiPIT[,j])
+    }
+    PITsum <- apply(eval_tabiPIT, 2, sum, na.rm = TRUE)
+    PITmean <- PITsum / nrow(eval_tabiPIT)
+    PITs[i, ] <- PITmean
+    crpss[i] <- mean(as.numeric(eval_tabi[,5]), na.rm = TRUE)
+    logss[i] <- mean(as.numeric(eval_tabi[,6]), na.rm = TRUE)
+  }
+
+  max_crpss <- which.max(crpss)
+  max_logss <- which.max(logss)
+
+  for(i in 1:numods){
+    x1 <- (i - 1) * 0.2
+    x2 <- (i) * 0.2
+    par(fig = c(x1, x2, 0.5, 0.97), mar = c(0.5, 0.5, 1, 0.25), new = TRUE)
+    blank(bty = "L", ylim = c(0, 1.75), xlim = c(0.5, 10.5))
+    points(PITs[i,], type = "h", lwd = 3)
+    abline(h = 1, lty = 3, lwd = 2)
+    text(1, 1.7, mod_names[i], cex = 0.75, adj = 0)
+  }
+
+  par(fig = c(0.6, 0.8, 0.5, 0.97), mar = c(1.5, 1.75, 1, 0.5), 
+      new = TRUE)
+  blank(bty = "L", ylim = c(-2.5, -1.5), xlim = c(0.4, 3.6))
+  points(max_crpss, crpss[max_crpss], cex = 1.5, pch = 16, lwd = 0, 
+         col = rgb(0.6, 0.6, 0.6, 0.6))
+  points(max_crpss, crpss[max_crpss], cex = 1.5, pch = 1, lwd = 1, 
+         col = rgb(0.6, 0.6, 0.6))
+  points(crpss, pch = 16, cex = 0.9)
+
+  text(1:3, -2.57, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
+  mtext(side = 2, "Ranked Probability Score", line = 1.1, cex = 0.5)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, 
+       at = seq(-2.5, -1.5, 0.1), labels = FALSE)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, 
+       at = seq(-2.5, -1.5, 0.5), lwd = 0)
+
+  par(fig = c(0.8, 1, 0.5, 0.97), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
+
+  blank(bty = "L", ylim = c(-2.5, -2), xlim = c(0.4, 3.6))
+  points(max_logss, logss[max_logss], cex = 1.5, pch = 16, lwd = 0, 
+         col = rgb(0.6, 0.6, 0.6, 0.6))
+  points(max_logss, logss[max_logss], cex = 1.5, pch = 1, lwd = 1, 
+         col = rgb(0.6, 0.6, 0.6))
+  points(logss, pch = 16, cex = 0.9)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05,  
+       at = seq(-2.5, -2, 0.1), labels = FALSE)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, 
+       at = seq(-2.5, -2, 0.1), lwd = 0)
+  text(1:3, -2.54, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
+  mtext(side = 2, "Log Score", line = 1.1, cex = 0.5)
+
+  par(fig = c(0, 1, 0.95, 1), mar = c(0, 0, 0, 0), new = TRUE)
+  blank(xlim = c(0, 1), ylim = c(0, 1))
+  text(0.5, 0.5, "Validation Period", xpd = TRUE, cex = 0.95)
+
+  eval_tabft <- eval_tab[eval_tab$origin == 500,]
+  eval_tabft_PIT <- matrix(NA, nrow = numods, ncol = nbins)
+  eval_tabft_c <- rep(NA, numods)
+  eval_tabft_l <- rep(NA, numods)
+
+  for(i in 1:numods){
+    incl <- which(eval_tabft$model == umods[i])
+    PITcol <- grepl("PIT", colnames(eval_tabft))
+    x <- eval_tabft[incl, PITcol]
+    for(j in 1:nbins){
+      x[, j] <- as.numeric(x[,j])
+    }
+
+    eval_tabft_PIT[i, ] <- apply(x, 2, sum) / nrow(x)
+    eval_tabft_c[i] <- mean(as.numeric(eval_tabft$crps[incl])) 
+    eval_tabft_l[i] <- mean(as.numeric(eval_tabft$logs[incl])) 
+  }
+
+  max_eval_tabft_c <- which.max(eval_tabft_c)
+  max_eval_tabft_l <- which.max(eval_tabft_l)
+
+  for(i in 1:numods){
+    x1 <- (i - 1) * 0.2
+    x2 <- (i) * 0.2
+    par(fig = c(x1, x2, 0, 0.47), mar = c(0.5, 0.5, 1, 0.25), new = TRUE)
+    blank(bty = "L", ylim = c(0, 3.5), xlim = c(0.5, 10.5))
+    points(eval_tabft_PIT[i,], type = "h", lwd = 3)
+    abline(h = 1, lty = 3, lwd = 2)
+    text(1, 3.4, mod_names[i], cex = 0.75, adj = 0, xpd = TRUE)
+  }
+
+
+  par(fig = c(0.6, 0.8, 0, 0.47), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
+  blank(bty = "L", ylim = c(-3.1, -0.9), xlim = c(0.5, 3.5))
+  points(max_eval_tabft_c, eval_tabft_c[max_eval_tabft_c], cex = 1.5, 
+         pch = 16, lwd = 0, col = rgb(0.6, 0.6, 0.6, 0.6))
+  points(max_eval_tabft_c, eval_tabft_c[max_eval_tabft_c], cex = 1.5, 
+         pch = 1, lwd = 1, col = rgb(0.6, 0.6, 0.6))
+  points(eval_tabft_c, pch = 16, cex = 0.9)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, labels = FALSE)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, lwd = 0)
+
+  text(1:3, -3.25, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
+  mtext(side = 2, "Ranked Probability Score", line = 1.1, cex = 0.5)
+
+  
+  par(fig = c(0.8, 1, 0, 0.47), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
+  blank(bty = "L", ylim = c(-2.7, -2.2), xlim = c(0.5, 3.5))
+  points(max_eval_tabft_l, eval_tabft_l[max_eval_tabft_l], cex = 1.5, 
+         pch = 16, lwd = 0, col = rgb(0.6, 0.6, 0.6, 0.6))
+  points(max_eval_tabft_l, eval_tabft_l[max_eval_tabft_l], cex = 1.5, 
+         pch = 1, lwd = 1, col = rgb(0.6, 0.6, 0.6))
+  points(eval_tabft_l, pch = 16, cex = 0.9)
+  text(1:3, -2.74, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
+  mtext(side = 2, "Log Score", line = 1.1, cex = 0.5)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, labels = FALSE)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, lwd = 0)
+
+
+  par(fig = c(0, 1, 0.45, 0.5), mar = c(0, 0, 0, 0), new = TRUE)
+  blank(xlim = c(0, 1), ylim = c(0, 1))
+  text(0.5, 0.5, "Final Test Period", xpd = TRUE, cex = 0.95)
+  dev.off()
+}

@@ -1,4 +1,0 @@
-make figure 1 compendium of distributions or do we add something to the existing fig 1 ? blargs, figure that out (lol, nice pun)
-reference updates...trim the ones out already, see if any more can go, move whatever is  needed to appendix
-appendix b structure
-re make the figures without ensembles
