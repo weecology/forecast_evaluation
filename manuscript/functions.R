@@ -576,9 +576,9 @@ default_nvalues <- function(x, type = "l", nrf = NULL, minn = NULL,
 
 
 
-fig1 <- function(){
-  tiff("fig1.tiff", width = 6, height = 5, units = "in", res = 200)
-  rc <- rgb(0.8, 0.8, 0.8)
+fig1top <- function(){
+  tiff("fig1top.tiff", width = 6, height = 4, units = "in", res = 200)
+  rc <- grey(0.6)
 
   par(mar = c(2.5, 1.75, 0, 0.75), fig = c(0, 1, 0.007, 0.49))
 
@@ -601,7 +601,7 @@ fig1 <- function(){
   x4 <- c(x3, 0.95)
   n <- length(x4)
   y3 <- c(y2, y2[n-1] - 0.025)
-  points(x4, y3, pch = 1, cex = 0.85, lwd = 2)
+  points(x4, y3, pch = 1, cex = 1.2, lwd = 2, col = grey(0,0.9))
   set.seed(123)
   fx <- c(0.995, 1.08, 1.15, 1.225)
   fn <- length(fx)
@@ -612,45 +612,43 @@ fig1 <- function(){
   mtext(side = 1, "Time", line = 0.6)
   axis(side = 1, at = seq(0, 1.25, 0.05), tck = -0.02, labels = FALSE, 
        lwd = 2)
-  axis(side = 1, at = seq(0, 1.25, 0.25), tck = -0.04, labels = FALSE, 
+  axis(side = 1, at = seq(0, 1.25, 0.25), tck = -0.03, labels = FALSE, 
        lwd = 2)
   axis(side = 2, at = seq(0, 1, 0.25), tck = -0.02, labels = FALSE, lwd = 2)
-  axis(side = 2, at = seq(0, 1, 0.5), tck = -0.04, labels = FALSE, lwd = 2)
+  axis(side = 2, at = seq(0, 1, 0.5), tck = -0.03, labels = FALSE, lwd = 2)
 
-  arrows(x4[n-1] - 0.05, y3[n-1] + 0.225, x4[n-1] - 0.005, y3[n-1] + 0.03, 
+  arrows(x4[n-1] - 0.05, y3[n-1] + 0.2, x4[n-1] - 0.005, y3[n-1] + 0.05, 
          length = 0.05, lwd = 2)
   text(x4[n-1] - 0.0625, y3[n-1] + 0.275, cex = 0.8, 
         expression(italic("y"[o-1])))
   mtext(side = 1, at = x4[n-1], cex = 0.8, line = 0.5, 
         expression(italic("t"[o-1])))
   points(rep(x4[n-1], 2), c(-0.1, y3[n-1] - 0.02), type = "l", lty = 2, 
-         lwd = 2, xpd = TRUE)
+         lwd = 2, xpd = TRUE, cex = 1.2, col = grey(0,0.9))
   points(rep(x4[n], 2), c(-0.1, y3[n] - 0.02), type = "l", lty = 2, lwd = 2, 
-         xpd = TRUE)
+         xpd = TRUE, cex = 1.2, col = grey(0,0.9))
   mtext(side = 1, at = x4[n], cex = 0.8, line = 0.5, 
         expression(italic("t"[o])))
 
-  points(fx, fy2, pch = 1, cex = 0.85, lwd = 2)
+  points(fx, fy2, pch = 1, cex = 1.2, lwd = 2, col = grey(0,0.9))
   mtext(side = 1, at = fx[fn] + 0.03, cex = 0.8, line = 0.5, 
         expression(italic("t"[o+P]*" = "*"t"[N])))
   points(rep(fx[fn], 2), c(-0.1, fy2[fn] - 0.02), type = "l", lty = 2, 
          lwd = 2, xpd = TRUE)
 
-  points(c(x4[n], fx[fn]), rep(-0.26, 2), type = "l", lwd = 2, xpd = TRUE)
-  points(rep(fx[fn], 2), c(-0.31, -0.2), type = "l", lwd = 2, xpd = TRUE)
-  points(rep(x4[n], 2), c(-0.31, -0.2), type = "l", lwd = 2, xpd = TRUE)
-  text(x = mean(c(x4[n], fx[fn])), y = -0.22, "forecast horizon", 
-       font = 3, cex = 0.55, xpd = TRUE)
-  text(x = mean(c(x4[n], fx[fn])), y = -0.29, "or lead time", 
-       font = 3, cex = 0.55, xpd = TRUE)
+  points(c(x4[n], fx[fn]), rep(-0.31, 2), type = "l", lwd = 2, xpd = TRUE)
+  points(rep(fx[fn], 2), c(-0.36, -0.26), type = "l", lwd = 2, xpd = TRUE)
+  points(rep(x4[n], 2), c(-0.36, -0.26), type = "l", lwd = 2, xpd = TRUE)
+  text(x = mean(c(x4[n], fx[fn])), y = -0.23, "forecast horizon", 
+       font = 3, cex = 0.6, xpd = TRUE)
 
-  text(x = x4[n] - 0.1375, y = -0.29, "forecast origin", 
-       font = 3, cex = 0.55, xpd = TRUE)
+  text(x = x4[n] - 0.1375, y = -0.38, "forecast origin", 
+       font = 3, cex = 0.6, xpd = TRUE)
 
-  arrows(x4[n] - 0.065, -0.28, x4[n] - 0.02, -0.17, length = 0.05, xpd = TRUE,
+  arrows(x4[n] - 0.065, -0.32, x4[n] - 0.02, -0.20, length = 0.05, xpd = TRUE,
          lwd = 2)
 
-  arrows(x4[1] + 0.02, y3[1] + 0.5, x4[1] + 0.002, y3[1] + 0.03, 
+  arrows(x4[1] + 0.02, y3[1] + 0.5, x4[1] + 0.002, y3[1] + 0.05, 
          length = 0.05, lwd = 2)
   text(x4[1] + 0.025, y3[1] + 0.55, cex = 0.8, expression(italic("y"[1])))
   mtext(side = 1, at = x4[1], cex = 0.8, line = 0.5, 
@@ -676,12 +674,12 @@ fig1 <- function(){
     polygon(xx2, yy2, col = rc)
 
   }
-  points(fx, fy2, pch = 16, cex = 0.85, lwd = 2, col = 0)
-  points(fx, fy2, pch = 1, cex = 0.85, lwd = 2)
+  points(fx, fy2, pch = 16, cex = 1.2, lwd = 2, col = grey(1,0.9))
+  points(fx, fy2, pch = 1, cex = 1.2, lwd = 2, col = grey(0,0.9))
 
   text(fx[1] + 0.04, fy2[1] + 0.45, cex = 0.8, 
         expression(italic("y"[o+1])))
-  arrows(fx[1] + 0.02, fy2[1] + 0.4, fx[1] + 0.002, fy2[1] + 0.03, 
+  arrows(fx[1] + 0.02, fy2[1] + 0.4, fx[1] + 0.002, fy2[1] + 0.05, 
          length = 0.05, lwd = 2)
 
   par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0, 0.72), new = TRUE)
@@ -764,10 +762,9 @@ fig1 <- function(){
 
 
 
-  par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0.7, 1), new = TRUE)
+  par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0.67, 1), new = TRUE)
   blank(ylim = c(0, 1), xlim = c(0, 1))
   text(x = 0, y = 0.95, "(a)", cex = 1.1, xpd = TRUE)
-
   set.seed(123)
   x1 <- rnorm(1e6)
   x2 <- rnorm(1e6, 0, 1.5)
@@ -776,33 +773,28 @@ fig1 <- function(){
   x5 <- c(rnorm(5e5, -3), rnorm(5e5, 3))
   x6 <- c(rnorm(3e5, -5, 0.5), rnorm(3e5, 5, 0.5), rnorm(4e5, 0))
 
-  par(mar = c(1.5, 2.5, 1.5, 1.5), c(0, 1, 0.7, 1), new = TRUE)
-  blank(bty = "L", xlim = c(-10, 10), ylim = c(0, 0.55))
-  points(density(x1), type = "l", lwd = 2, col = grey(0, 0.6))
-  points(density(x2), type = "l", lwd = 2, col = grey(0.1, 0.6))
-  points(density(x3), type = "l", lwd = 2, col = grey(0.2, 0.6))
-  points(density(x4), type = "l", lwd = 2, col = grey(0.3, 0.6))
-  points(density(x5), type = "l", lwd = 2, col = grey(0.4, 0.6))
-  points(density(x6), type = "l", lwd = 2, col = grey(0.5, 0.6))
+  par(mar = c(1.5, 2.5, 1.0, 1.5), c(0, 1, 0.7, 1), new = TRUE)
+  blank(bty = "L", xlim = c(-8, 8), ylim = c(0, 0.55))
+  box(bty = "L", lwd = 2)
+
+  points(density(x1), type = "l", lwd = 2, col = grey(0, 0.8))
+  points(density(x2), type = "l", lwd = 2, col = grey(0.1, 0.8))
+  points(density(x3), type = "l", lwd = 2, col = grey(0.2, 0.8))
+  points(density(x4), type = "l", lwd = 2, col = grey(0.3, 0.8))
+  points(density(x5), type = "l", lwd = 2, col = grey(0.4, 0.8))
+  points(density(x6), type = "l", lwd = 2, col = grey(0.5, 0.8))
   axis(1, at = seq(-10, 10, 1), tck = -0.04, labels = FALSE)
-  axis(1, at = seq(-10, 10, 5), tck = -0.07, labels = FALSE)
-  axis(1, at = seq(-10, 10, 5), line = -0.7, lwd = 0, cex.axis = 0.75)
+  axis(1, at = seq(-10, 10, 5), tck = -0.08, labels = FALSE)
 
+  mtext(side = 2, line = 0.5, "Density", cex = 0.75)
 
-  axis(2, at = seq(0, 0.6, 0.1), tck = -0.04, labels = FALSE)
-  axis(2, at = seq(0, 0.5, 0.5), tck = -0.07, labels = FALSE)
-  axis(2, at = seq(0, 0.5, 0.5), line = -0.5, lwd = 0, las =1 , 
-       cex.axis = 0.75)
-
-
-  mtext(side = 2, line = 1.5, "Density", cex = 0.75)
 
   dev.off()
 }
 
-fig2 <- function(){
+fig1bottom <- function(){
 
-  tiff("fig2.tiff", width = 6, height = 4, units = "in", res = 200)
+  tiff("fig1bottom.tiff", width = 6, height = 3, units = "in", res = 200)
   rc <- rgb(0.8, 0.8, 0.8)
   par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0.9, 1))
   blank(bty = "n", xlim = c(-1, 20.5), ylim = c(0, 2))
@@ -819,9 +811,10 @@ fig2 <- function(){
 
   par(mar = c(0, 0, 0, 0), fig = c(0, 1, 0.61, 0.91), new = TRUE)
   blank(bty = "n", xlim = c(-1, 20.5), ylim = c(0, 2))
-  text(-1.5, 2.07, "a", cex = 1.125, font = 2, xpd = NA)
-  text(-1.1, 2.06, "Single origin end-sample testing", cex = 0.7, font = 3, 
-       xpd = NA, adj = 0)
+
+  text(-0.8, 2.55, "(c)", cex = 1.1, font = 1, xpd = NA)
+
+  text(-1.1, 2.06, "Single Origin", cex = 0.7, font = 3, xpd = NA, adj = 0)
 
   lbox <- c(rep(1, 17), rep(2, 3))
 
@@ -923,14 +916,12 @@ fig2 <- function(){
    
   }
 
-  text(-1.5, 2.07, "b", cex = 1.125, font = 2, xpd = NA)
-  text(-1.1, 2.06, "Rolling origin end-sample testing", cex = 0.7, font = 3, 
-       xpd = NA, adj = 0)
+  text(-1.1, 2.06, "Rolling Origin", cex = 0.7, font = 3, xpd = NA, adj = 0)
 
   dev.off()
 }
 
-fig3 <- function(){
+figA1 <- function(){
   set.seed(321)
 
   xs <- seq(1, 50, length.out = 30)
@@ -939,7 +930,7 @@ fig3 <- function(){
   x <- rpois(nlams, lambda = lams)
   N <- 1e4
 
-  tiff("fig3.tiff", width = 6, height = 7, units = "in", res = 200)
+  tiff("figA1.tiff", width = 6, height = 7, units = "in", res = 200)
 
   topoffset <- 0.94
   par(fig = c(0, 0.6, topoffset, 1), mar = c(0, 0, 0, 0))
@@ -957,41 +948,41 @@ fig3 <- function(){
   text(x = 1, y = 0.825, "Transform (PIT)", cex = 0.8, font = 1)
 
   draws1 <- sapply(lams, rpois, n = N)
-  fig3_row(x, draws1, 1, title = "True generating distribution")
+  figA1_row(x, draws1, 1, title = "True generating distribution")
 
   draws2 <- sapply(lams + 2, rpois, n = N)
-  fig3_row(x, draws2, 2, title = "Positively biased")
+  figA1_row(x, draws2, 2, title = "Positively biased")
 
   draws3 <- sapply(lams - 2, rpois, n = N)
-  fig3_row(x, draws3, 3, title = "Negatively biased")
+  figA1_row(x, draws3, 3, title = "Negatively biased")
 
   draws4 <- sapply(x, rpois, n = N)
-  fig3_row(x, draws4, 4, title = "Too accurate")
+  figA1_row(x, draws4, 4, title = "Too accurate")
 
   draws5 <- matrix(NA, nrow = N, ncol = nlams)
   for(i in 1:nlams){
     draws5[,i] <- round(rnorm(N, lams[i], sd = sqrt(lams[i]) / 1.6))
   }
-  fig3_row(x, draws5, 5, title = "Too precise")
+  figA1_row(x, draws5, 5, title = "Too precise")
 
   draws6 <- matrix(NA, nrow = N, ncol = nlams)
   for(i in 1:nlams){
     draws6[,i] <- rnbinom(N, mu = lams[i], size = 1)
   }
-  fig3_row(x, draws6, 6, title = "Too imprecise")
+  figA1_row(x, draws6, 6, title = "Too imprecise")
 
   draws7 <- matrix(NA, nrow = N, ncol = nlams)
   for(i in 1:nlams){
     draws7[,i] <-  c(rpois(N/2, max(c(0, lams[i] - 5))), 
                      rpois(N/2, lams[i] + 5))
   }
-  fig3_row(x, draws7, 7, title = "Bimodal with proper median")
+  figA1_row(x, draws7, 7, title = "Bimodal with proper median")
 
   dev.off()
 }
 
 
-fig3_row <- function(x, draws, frow, minx = 1, maxx = 30, nxs = 30, 
+figA1_row <- function(x, draws, frow, minx = 1, maxx = 30, nxs = 30, 
                      n_bins = 10, ym1 = 35, ym2 = 45, wex = 1.45, 
                      steps = 1:length(x), minstep = 1,
                      maxstep = 30, buff = -0.5, minp = 1e-3, vwidth = 0.5, 
@@ -1050,67 +1041,146 @@ fig3_row <- function(x, draws, frow, minx = 1, maxx = 30, nxs = 30,
 
 
 
-fig4 <- function(abunds, moon_dates){
-  tiff("fig4.tiff", width = 6, height = 3, units = "in", res = 200)
+fig2top <- function(abunds, moon_dates, mod1, mod2, mod3){
+  tiff("fig2top.tiff", width = 6, height = 4.5, units = "in", res = 200)
 
-  par(fig = c(0, 1, 0, 1), mar = c(1.25, 2.125, 1, 1))
+  par(fig = c(0, 1, 0, 0.7), mar = c(1.25, 2.125, 0.5, 1))
   daterange <- as.Date(c("1993-08-01", "2019-01-01"))
   blank(bty = "L", xlim = daterange, ylim = c(-0.5, 18))
 
   rectx1 <- as.Date(moon_dates[300]) - 14
   rectx2 <- as.Date(moon_dates[500]) + 14
-  rectcol1 <- rgb(0.7, 0.7, 0.7, 0.4)
+  rectcol1 <- rgb(0.9, 0.9, 0.9, 1)
   rect(rectx1, -0.3, rectx2, 18, col = rectcol1, border = NA)
   rectx1 <- as.Date(moon_dates[501]) - 14
   rectx2 <- as.Date(moon_dates[512]) + 14
-  rectcol1 <- rgb(0.2, 0.2, 0.2, 0.4)
+  rectcol1 <- rgb(0.8, 0.8, 0.8, 1)
   rect(rectx1, -0.3, rectx2, 18, col = rectcol1, border = NA)
 
 
   x <- as.Date(moon_dates[200:512])
   y <- abunds[200:512]
   set.seed(123)
-  yy <- y + runif(length(y), -0.25, 0.25)
+  yy <- y
   nas <- which(is.na(y))
-  points(x[-nas], yy[-nas], type = "l", col = rgb(0.1, 0.1, 0.1, 0.5))
-  points(x, yy, cex = 0.6, pch = 16, col = rgb(1, 1, 1, 1))
-  points(x, yy, cex = 0.6, col = rgb(0.1, 0.1, 0.1, 0.5))
-  axis(2, at = seq(0, 15, 5), labels = FALSE, tck = -0.0225)
-  axis(2, at = seq(0, 15, 5), las = 1, lwd = 0, line = -0.5, cex.axis = 0.7)
+  points(x[-nas], yy[-nas], type = "l", col = rgb(0.1, 0.1, 0.1, 0.6))
+  points(x, yy, cex = 0.45, pch = 16, col = rgb(1, 1, 1, 1))
+  points(x, yy, cex = 0.45, col = rgb(0.1, 0.1, 0.1, 0.6))
+  axis(2, at = seq(0, 10, 10), labels = FALSE, tck = -0.025)
+  axis(2, at = seq(0, 10, 10), las = 1, lwd = 0, line = -0.5, cex.axis = 0.8)
+  axis(2, at = seq(0, 18, 5), labels = FALSE, tck = -0.02)
   axis(2, at = seq(0, 18, 1), labels = FALSE, tck = -0.01)
-  mtext(side = 2, line = 1.1, cex = 0.8, 
+  mtext(side = 2, line = 1.45, cex = 0.6, 
         expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
   datevals <- as.Date(paste0(1993:2019, "-01-01"))
-  axis(1, at = datevals, labels = FALSE, tck = -0.01)
+  axis(1, at = datevals, labels = FALSE, tck = -0.02)
   datevals <- as.Date(paste0(seq(1995, 2019, 5), "-01-01"))
-  datelabs <- seq(1995, 2019, 5)
-  axis(1, at = datevals, labels = datelabs, lwd = 0, line = -0.9, 
+  axis(1, at = datevals, labels = FALSE, tck = -0.03)
+  datevals <- as.Date(paste0(seq(1995, 2015, 5), "-01-01"))
+  datelabs <- seq(1995, 2015, 5)
+  axis(1, at = datevals, labels = datelabs, lwd = 0, line = -0.8, 
        cex.axis = 0.7)
   axis(1, at = datevals, labels = FALSE, tck = -0.02)
   
-  par(fig = c(0.1, 0.35, 0.5, 1), mar = c(1.25, 1.5, 1, 0.5), new = TRUE)
+  par(fig = c(0.1, 0.4, 0.4, 0.65), mar = c(1.25, 1.5, 0, 0.5), new = TRUE)
   blank(bty = "L", xlim = c(-0.5, 17.5), ylim = c(0, 0.4))
   tt <- table(abunds[200:512])
-  points(tt/sum(tt))
+  points(tt/sum(tt), lwd = 3)
 
   axis(1, at = seq(0, 15, 5), labels = FALSE, tck = -0.025)
-  axis(1, at = seq(0, 15, 5), las = 1, lwd = 0, line = -1.25, cex.axis = 0.5)
+  axis(1, at = seq(0, 15, 10), las = 1, lwd = 0, line = -1.25, cex.axis = 0.5)
   axis(1, at = seq(0, 18, 1), labels = FALSE, tck = -0.015)
-  mtext(side = 1, line = 0.35, cex = 0.5, 
-        expression(paste(italic(C.), " ", italic(penicillatus ), " counts")))
+  mtext(side = 1, line = 0.3, cex = 0.5, "Counts")
 
   axis(2, at = seq(0, 0.4, 0.1), labels = FALSE, tck = -0.025)
-  axis(2, at = seq(0, 0.4, 0.1), las = 1, lwd = 0, line = -0.75,
+  axis(2, at = seq(0, 0.4, 0.2), las = 1, lwd = 0, line = -0.75,
        cex.axis = 0.5)
   axis(2, at = seq(0, 0.4, 0.05), labels = FALSE, tck = -0.01)
-  mtext(side = 2, line = 1.1, cex = 0.5, "Frequency")
+  mtext(side = 2, line = 1, cex = 0.5, "Frequency")
+
+  par(fig = c(0, 1, 0.66, 0.72), mar = c(0, 0, 0, 0), new = TRUE)
+  blank(xlim = c(0, 1), ylim = c(0, 1))
+  text(0, 0.5, "(a)", xpd = TRUE, cex = 1.25)
+
+  par(fig = c(0.25, 0.95, 0.65, 1), mar = c(1, 1, 1, 1), new = TRUE)
+  blank(bty = "L", xlim = c(0.5, 12.5), ylim = c(-0.5, 15))
+
+
+  polygon(c(0.5, 12.5, 13.26275, 13., 0.5),
+          c(-1, -4, -4, -1, -1), col = rectcol1, border = NA,
+         xpd = NA)
+  rect(0.5, -1, 13.25, 20, col = rectcol1, border = NA)
+  box(bty = "L", lwd = 2)
+
+  for(i in 1:12){
+    Hn <- unlist(mod3[[1]]$model$mcmc[,5+i])
+    dens <- density(Hn)
+    incl <- which(dens$x < 15 & dens$y > 0.01)
+    fx <- i
+    xxa <- fx + dens$y[incl] * 0.5
+    xxb <- fx - dens$y[incl] * 0.5 
+    xx <- c(xxa, xxb[length(xxb):1])
+    xx2 <- c(xx, xx[1])
+    violiny <- c(dens$x[incl], dens$x[incl][length(dens$x[incl]):1])
+    violiny2 <- c(violiny, violiny[1])
+    polygon(xx2, violiny2, border = grey(0.1, 1), col = grey(0.1, 1))
+  }
+
+
+  for(i in 1:12){
+    Hn <- unlist(mod2[[1]]$model$mcmc[,3+i])
+    dens <- density(Hn)
+    incl <- which(dens$x < 15 & dens$y > 0.01)
+    fx<-i
+    xxa <- fx + dens$y[incl] * 0.5
+    xxb <- fx - dens$y[incl] * 0.5 
+    xx <- c(xxa, xxb[length(xxb):1])
+    xx2 <- c(xx, xx[1])
+    violiny <- c(dens$x[incl], dens$x[incl][length(dens$x[incl]):1])
+    violiny2 <- c(violiny, violiny[1])
+    polygon(xx2, violiny2, border = grey(0.4, 1), col = grey(0.4, 0.5))
+}
+
+
+
+  for(i in 1:12){
+    Hn <- unlist(mod1[[1]]$model$mcmc[,2+i])
+    dens <- density(Hn)
+    incl <- which(dens$x < 15 & dens$y > 0.01)
+    fx<-i
+    xxa <- fx + dens$y[incl] * 0.5 
+    xxb <- fx - dens$y[incl] * 0.5 
+    xx <- c(xxa, xxb[length(xxb):1])
+    xx2 <- c(xx, xx[1])
+    violiny <- c(dens$x[incl], dens$x[incl][length(dens$x[incl]):1])
+    violiny2 <- c(violiny, violiny[1])
+    polygon(xx2, violiny2, border = grey(0.6, 1), col = grey(0.6, 0.5))
+  }
+
+  points(1:12, y[302:313], pch = 16, col = rgb(1, 1, 1, 0.8))
+  points(1:12, y[302:313], lwd = 2, cex = 1.1, col = rgb(0, 0, 0, 0.9))
+
+  mtext(side = 3, c("RW", "AR(1)", "cAR(1)"), at = c(4, 6, 8), line = 0.2,
+        cex = 0.6, font = 2, col = c(grey(0.6), grey(0.4), grey(0.1)))
+
+  axis(2, at = seq(0, 20, 5), labels = FALSE, tck = -0.05)
+  axis(2, at = seq(0, 20, 1), labels = FALSE, tck = -0.03)
+  axis(2, at = seq(0, 20, 10), las = 1, lwd = 0, line = -0.6,
+       cex.axis = 0.6)
+  mtext(side = 2, line = 1, cex = 0.55, 
+        expression(paste(italic(C.), " ", italic(penicillatus ))))
+  axis(1, at = seq(1, 12, 1), labels = FALSE, tck = -0.03)
+
+  par(fig = c(0, 1, 0.9, 1), mar = c(0, 0, 0, 0), new = TRUE)
+  blank(xlim = c(0, 1), ylim = c(0, 1))
+  text(0.22, 0.8, "(d)", xpd = TRUE, cex = 1.25)
 
   dev.off()
 }
 
-fig5 <- function(mod1, mod2, mod3, nbins = 10, last_in = 500){
+fig2bottom <- function(mod1, mod2, mod3, nbins = 10, last_in = 500){
 
-  tiff("fig5.tiff", width = 6, height = 4, units = "in", res = 200)
+  tiff("fig2bottom.tiff", width = 6, height = 2.5, units = "in", res = 200)
 
   par(fig = c(0, 1, 0, 1))
   blank()
@@ -1145,14 +1215,14 @@ fig5 <- function(mod1, mod2, mod3, nbins = 10, last_in = 500){
   for(i in 1:numods){
     x1 <- (i - 1) * 0.2
     x2 <- (i) * 0.2
-    par(fig = c(x1, x2, 0.5, 0.97), mar = c(0.5, 0.5, 1, 0.25), new = TRUE)
+    par(fig = c(x1, x2, 0.5, 1), mar = c(0.5, 0.5, 1.25, 0.25), new = TRUE)
     blank(bty = "L", ylim = c(0, 1.75), xlim = c(0.5, 10.5))
     points(PITs[i,], type = "h", lwd = 3)
     abline(h = 1, lty = 3, lwd = 2)
     text(1, 1.7, mod_names[i], cex = 0.75, adj = 0)
   }
 
-  par(fig = c(0.6, 0.8, 0.5, 0.97), mar = c(1.5, 1.75, 1, 0.5), 
+  par(fig = c(0.6, 0.8, 0.5, 1), mar = c(1.5, 1.75, 1, 0.5), 
       new = TRUE)
   blank(bty = "L", ylim = c(-2.5, -1.5), xlim = c(0.4, 3.6))
   points(max_crpss, crpss[max_crpss], cex = 1.5, pch = 16, lwd = 0, 
@@ -1161,14 +1231,16 @@ fig5 <- function(mod1, mod2, mod3, nbins = 10, last_in = 500){
          col = rgb(0.6, 0.6, 0.6))
   points(crpss, pch = 16, cex = 0.9)
 
-  text(1:3, -2.57, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
-  mtext(side = 2, "Ranked Probability Score", line = 1.1, cex = 0.5)
-  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, 
+  text(1:3, -2.64, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
+  mtext(side = 2, "RPS", line = 1.1, cex = 0.6)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.03, 
        at = seq(-2.5, -1.5, 0.1), labels = FALSE)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, 
+       at = seq(-2.5, -1.5, 0.5), labels = FALSE)
   axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, 
        at = seq(-2.5, -1.5, 0.5), lwd = 0)
 
-  par(fig = c(0.8, 1, 0.5, 0.97), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
+  par(fig = c(0.8, 1, 0.5, 1), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
 
   blank(bty = "L", ylim = c(-2.5, -2), xlim = c(0.4, 3.6))
   points(max_logss, logss[max_logss], cex = 1.5, pch = 16, lwd = 0, 
@@ -1176,16 +1248,16 @@ fig5 <- function(mod1, mod2, mod3, nbins = 10, last_in = 500){
   points(max_logss, logss[max_logss], cex = 1.5, pch = 1, lwd = 1, 
          col = rgb(0.6, 0.6, 0.6))
   points(logss, pch = 16, cex = 0.9)
-  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05,  
-       at = seq(-2.5, -2, 0.1), labels = FALSE)
-  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, 
-       at = seq(-2.5, -2, 0.1), lwd = 0)
-  text(1:3, -2.54, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
-  mtext(side = 2, "Log Score", line = 1.1, cex = 0.5)
 
-  par(fig = c(0, 1, 0.95, 1), mar = c(0, 0, 0, 0), new = TRUE)
+  mtext(side = 2, "Log Score", line = 1.15, cex = 0.6)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, labels = FALSE)
+  axis(side = 2, las = 1, at = c(-2.7, -2.5, -2.3, -2.1),
+        cex.axis = 0.5, tck = -0.05, line = -0.7, lwd = 0)
+
+  text(1:3, -2.57, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
+  par(fig = c(0, 1, 0.92, 1), mar = c(0, 0, 0, 0), new = TRUE)
   blank(xlim = c(0, 1), ylim = c(0, 1))
-  text(0.5, 0.5, "Validation Period", xpd = TRUE, cex = 0.95)
+  text(0, 0.45, "(b)", xpd = TRUE, cex = 1.25)
 
   eval_tabft <- eval_tab[eval_tab$origin == 500,]
   eval_tabft_PIT <- matrix(NA, nrow = numods, ncol = nbins)
@@ -1211,43 +1283,45 @@ fig5 <- function(mod1, mod2, mod3, nbins = 10, last_in = 500){
   for(i in 1:numods){
     x1 <- (i - 1) * 0.2
     x2 <- (i) * 0.2
-    par(fig = c(x1, x2, 0, 0.47), mar = c(0.5, 0.5, 1, 0.25), new = TRUE)
+    par(fig = c(x1, x2, 0, 0.5), mar = c(0.5, 0.5, 1.25, 0.25), new = TRUE)
     blank(bty = "L", ylim = c(0, 3.5), xlim = c(0.5, 10.5))
     points(eval_tabft_PIT[i,], type = "h", lwd = 3)
     abline(h = 1, lty = 3, lwd = 2)
     text(1, 3.4, mod_names[i], cex = 0.75, adj = 0, xpd = TRUE)
   }
 
-
-  par(fig = c(0.6, 0.8, 0, 0.47), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
+  par(fig = c(0.6, 0.8, 0, 0.5), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
   blank(bty = "L", ylim = c(-3.1, -0.9), xlim = c(0.5, 3.5))
   points(max_eval_tabft_c, eval_tabft_c[max_eval_tabft_c], cex = 1.5, 
          pch = 16, lwd = 0, col = rgb(0.6, 0.6, 0.6, 0.6))
   points(max_eval_tabft_c, eval_tabft_c[max_eval_tabft_c], cex = 1.5, 
          pch = 1, lwd = 1, col = rgb(0.6, 0.6, 0.6))
   points(eval_tabft_c, pch = 16, cex = 0.9)
-  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, labels = FALSE)
-  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, lwd = 0)
+  text(1:3, -3.4, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
+  mtext(side = 2, "RPS", line = 1.1, cex = 0.6)
 
-  text(1:3, -3.25, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
-  mtext(side = 2, "Ranked Probability Score", line = 1.1, cex = 0.5)
-
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.03, 
+       at = seq(-3, 1, 0.5), labels = FALSE)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, 
+       at = seq(-3, 1, 1), labels = FALSE)
+  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, 
+       at = seq(-3, 1, 1), lwd = 0)
   
-  par(fig = c(0.8, 1, 0, 0.47), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
+  par(fig = c(0.8, 1, 0, 0.5), mar = c(1.5, 1.75, 1, 0.5), new = TRUE)
   blank(bty = "L", ylim = c(-2.7, -2.2), xlim = c(0.5, 3.5))
   points(max_eval_tabft_l, eval_tabft_l[max_eval_tabft_l], cex = 1.5, 
          pch = 16, lwd = 0, col = rgb(0.6, 0.6, 0.6, 0.6))
   points(max_eval_tabft_l, eval_tabft_l[max_eval_tabft_l], cex = 1.5, 
          pch = 1, lwd = 1, col = rgb(0.6, 0.6, 0.6))
   points(eval_tabft_l, pch = 16, cex = 0.9)
-  text(1:3, -2.74, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
-  mtext(side = 2, "Log Score", line = 1.1, cex = 0.5)
+  text(1:3, -2.76, mod_names2, xpd = TRUE, srt = 55, cex = 0.5, adj = 1)
+  mtext(side = 2, "Log Score", line = 1.15, cex = 0.6)
   axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, labels = FALSE)
-  axis(side = 2, las = 1, cex.axis = 0.5, tck = -0.05, line = -0.7, lwd = 0)
+  axis(side = 2, las = 1, at = c(-2.7, -2.5, -2.3),
+        cex.axis = 0.5, tck = -0.05, line = -0.7, lwd = 0)
 
-
-  par(fig = c(0, 1, 0.45, 0.5), mar = c(0, 0, 0, 0), new = TRUE)
+  par(fig = c(0, 1, 0.44, 0.52), mar = c(0, 0, 0, 0), new = TRUE)
   blank(xlim = c(0, 1), ylim = c(0, 1))
-  text(0.5, 0.5, "Final Test Period", xpd = TRUE, cex = 0.95)
+  text(0, 0.45, "(c)", xpd = TRUE, cex = 1.25)
   dev.off()
 }

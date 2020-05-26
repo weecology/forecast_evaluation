@@ -15,11 +15,11 @@ moon_dates <- load_trapping_data(clean = FALSE)$newmoons_table$newmoondate
 # else, 
     load_models(1:3)
 
-fig1()
-fig2()
-fig3()
-fig4(abunds, moon_dates)
-fig5(mod1, mod2, mod3)
+fig1top()
+fig1bottom()
+figA1()
+fig2top(abunds, moon_dates, mod1, mod2, mod3)
+fig2bottom(mod1, mod2, mod3)
 
 
 
