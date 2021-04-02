@@ -1,0 +1,32 @@
+{
+"title": "Evaluating Probabilistic Ecological Forecasts",
+"creators": [
+    {
+      "affiliation": "DAPPER Stats",
+      "name": "Juniper L. Simonis",
+      "orcid": "0000-0001-9798-0460"
+    },
+      "affiliation": "University of Florida",
+      "name": "Ethan P. White",
+      "orcid": "0000-0001-6728-7745"
+    },
+    {
+      "affiliation": "University of Florida",
+      "name": "S. K. Morgan Ernest",
+      "orcid": "0000-0002-6026-8530"
+    }
+],
+    "description": "Probabilistic near-term forecasting facilitates evaluation of model predictions against observations and is of pressing need in ecology to inform environmental decision making and effect societal change. Despite this imperative, many ecologists are unfamiliar with the widely used tools for evaluating probabilistic forecasts developed in other fields. We address this gap by reviewing the literature on probabilistic forecast evaluation from diverse fields including climatology, economics, and epidemiology. We present established practices for selecting evaluation data (end-sample hold out), graphical forecast evaluation (times-series plots with uncertainty, Probability Integral Transform plots), quantitative evaluation using scoring rules (log, quadratic, spherical, and ranked probability scores), and comparing scores across models (skill score, Diebold-Mariano test). We cover common approaches, highlight mathematical concepts to follow, and note decision points to allow application of general principles to specific forecasting endeavors. We illustrate these approaches with an application to a long-term rodent population time series currently used for ecological forecasting and discuss how ecology can continue to learn from and drive the cross-disciplinary field of forecasting science.",
+    "keywords": [
+    "ecology",
+    "forecast",
+    "skill score",
+    "prequential forecasting",
+    "probaility integral transform",
+    "desert pocket mouse",
+    "Bayesian hierarchical modeling"
+  ],
+    "access_right": "open",
+    "license": "CC-BY-4.0",
+    "upload_type": "article"
+}
