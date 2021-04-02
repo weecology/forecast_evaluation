@@ -1,13 +1,9 @@
 
-manuscript/model_output/mod1_withmodels.RData
-manuscript/model_output/mod2_withmodels.RData
-manuscript/model_output/mod3_withmodels.RData
-manuscript/model_output/mod4_withmodels.RData
-manuscript/~$monis_et_al_forecast_eval.docx
-manuscript/model_output_short/mod1_withmodels.RData
-manuscript/model_output_short/mod1_withoutmodels.RData
-manuscript/model_output_short/mod2_withmodels.RData
-manuscript/model_output_short/mod2_withoutmodels.RData
-manuscript/model_output_short/mod3_withmodels.RData
-manuscript/model_output_short/mod3_withoutmodels.RData
-manuscript/model_output_short/stack_df.RData
+manuscript/model_output/mod1_withmodels.rds
+manuscript/model_output/mod2_withmodels.rds
+manuscript/model_output/mod3_withmodels.rds
+
+manuscript/model_output/mod1_withoutmodels.rds
+manuscript/model_output/mod2_withoutmodels.rds
+manuscript/model_output/mod3_withoutmodels.rds
+
