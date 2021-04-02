@@ -1,7 +1,5 @@
-# Methods and tools for evaluating probabilistic forecasts
+*Evaluating Probabilistic Ecological Forecasts* by J.L. Simonis, E.P. White, and S.K.M. Ernest *In Press* in *Ecology*.
 
-This repository contains documentation and code for evaluating probabilistic forecasts.
-Although collated for ecological studies, these methods apply broadly across domains.
+## Abstract 
 
-At present, the main focus of this repository is a manuscript,
-but additional documents and code blocks will be added over time.
+Probabilistic near-term forecasting facilitates evaluation of model predictions against observations and is of pressing need in ecology to inform environmental decision making and effect societal change. Despite this imperative, many ecologists are unfamiliar with the widely used tools for evaluating probabilistic forecasts developed in other fields. We address this gap by reviewing the literature on probabilistic forecast evaluation from diverse fields including climatology, economics, and epidemiology. We present established practices for selecting evaluation data (end-sample hold out), graphical forecast evaluation (times-series plots with uncertainty, Probability Integral Transform plots), quantitative evaluation using scoring rules (log, quadratic, spherical, and ranked probability scores), and comparing scores across models (skill score, Diebold-Mariano test). We cover common approaches, highlight mathematical concepts to follow, and note decision points to allow application of general principles to specific forecasting endeavors. We illustrate these approaches with an application to a long-term rodent population time series currently used for ecological forecasting and discuss how ecology can continue to learn from and drive the cross-disciplinary field of forecasting science.
