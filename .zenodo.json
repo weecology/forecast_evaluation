@@ -28,5 +28,6 @@
   ],
     "access_right": "open",
     "license": "CC-BY-4.0",
-    "upload_type": "publication"
+    "upload_type": "publication",
+    "publication_type": "article"
 }
