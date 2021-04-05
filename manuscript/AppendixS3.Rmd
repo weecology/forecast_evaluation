@@ -61,36 +61,15 @@ train_ar1_mod
 We'll use the `forecast` function to provide forecasted values with confidence intervals for plotting:
 
 ```{r, fig.dim = c(6, 4)}
-plot_aa_forecast <- data.frame(forecast(train_aa_mod, 11, level = c(50, 95)))
-plot(gold, xlim = c(800, 1110), ylim = c(350, 500), las = 1, lwd = 2, 
-     main = "Auto ARIMA")
-polygon(c(1097:1108, 1108:1097), 
-        c(gold_train[1097], plot_aa_forecast[,4], plot_aa_forecast[11:1,5], 
-          gold_train[1097]),
-        lwd = 1, col = grey(0.7, 0.5), border = grey(0.7, 0.5))
-polygon(c(1097:1108, 1108:1097), 
-        c(gold_train[1097], plot_aa_forecast[,2], plot_aa_forecast[11:1,3],
-          gold_train[1097]),
-        lwd = 1, col = grey(0.5, 0.5), border = grey(0.5, 0.5))
-points(1098:1108, plot_aa_forecast[,1], type = "l", lwd = 1)
-points(gold, lwd = 2, type = "l")
+aa_forecast <- forecast(train_aa_mod, 11, level = c(50, 95))
+plot(aa_forecast, xlim = c(800, 1110), ylim = c(350, 500), main = "Auto ARIMA", las = 1)
+lines(1098:1108, gold_test)
 ```
 
 ```{r, fig.dim = c(6, 4)}
-plot_ar1_forecast <- data.frame(forecast(train_ar1_mod, 11, 
-                                         level = c(50, 95)))
-plot(gold, xlim = c(800, 1110), ylim = c(350, 500), las = 1, lwd = 2, 
-     main = "AR 1")
-polygon(c(1097:1108, 1108:1097), 
-        c(gold_train[1097], plot_ar1_forecast[,4], plot_ar1_forecast[11:1,5], 
-        gold_train[1097]),
-        lwd = 1, col = grey(0.7, 0.5), border = grey(0.7, 0.5))
-polygon(c(1097:1108, 1108:1097), 
-        c(gold_train[1097], plot_ar1_forecast[,2], plot_ar1_forecast[11:1,3],
-        gold_train[1097]),
-        lwd = 1, col = grey(0.5, 0.5), border = grey(0.5, 0.5))
-points(1098:1108, plot_ar1_forecast[,1], type = "l", lwd = 1)
-points(gold, lwd = 2, type = "l")
+ar1_forecast <- forecast(train_ar1_mod, 11, level = c(50, 95))
+plot(ar1_forecast, xlim = c(800, 1110), ylim = c(350, 500), main = "AR 1", las = 1)
+lines(1098:1108, gold_test)
 ```
 
 For evaluation, it is more helpful to have the parameters of the predicted distributions (mean and standard error) or to use them to draw representative samples. We can get the parameters from the `predict` function but first need to put the time in the model fit objects as part of the calls, otherwise it is empty:
@@ -182,8 +161,8 @@ Both PITs show non-uniform distributions, with overrepresentation in the medians
 
 ```{r, fig.dim = c(6, 4)}
 par(mfrow = c(1, 2))
-hist(aa_PIT, breaks = seq(0, 1, 0.1), las = 1)
-hist(ar1_PIT, breaks = seq(0, 1, 0.1), las = 1)
+hist(aa_PIT, breaks = seq(0, 1, 0.1), las = 1, main = "Auto ARIMA", xlab = "PIT")
+hist(ar1_PIT, breaks = seq(0, 1, 0.1), las = 1, main = "AR 1", xlab = "PIT")
 ```
 
 
